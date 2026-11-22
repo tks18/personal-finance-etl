@@ -15,9 +15,13 @@ Does not own
 
 from __future__ import annotations
 
+from personal_finance_etl.contracts.capabilities import CapabilityId
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
-from personal_finance_etl.infrastructure.warehouse.contracts import BRONZE_CONTRACT_REGISTRY
+from personal_finance_etl.infrastructure.warehouse.contracts import (
+    BRONZE_CONTRACT_REGISTRY,
+    CANDIDATE_BRONZE_CONTRACT_REGISTRY,
+)
 
 __all__ = ["BRONZE_DDL", "BRONZE_TABLE_SCHEMAS", "generate_bronze_ddl"]
 
@@ -396,6 +400,61 @@ BRONZE_TABLE_SCHEMAS: dict[DatasetId, tuple[str, ...]] = {
         "Is_Closure_Gap BOOLEAN",
         "artifact_id VARCHAR",
     ),
+    # --- Candidate Canonical Household Datasets (Phase 052) ---
+    DatasetId.HOUSEHOLD_CATEGORIES: (
+        "category_id VARCHAR",
+        "category_name VARCHAR",
+        "category_kind VARCHAR",
+        "parent_category_id VARCHAR",
+        "artifact_id VARCHAR",
+    ),
+    DatasetId.HOUSEHOLD_ASSET_CATEGORIES: (
+        "asset_category_id VARCHAR",
+        "asset_category_name VARCHAR",
+        "artifact_id VARCHAR",
+    ),
+    DatasetId.HOUSEHOLD_ACCOUNTS: (
+        "asset_id VARCHAR",
+        "asset_name VARCHAR",
+        "asset_category_id VARCHAR",
+        "currency_id VARCHAR",
+        "description VARCHAR",
+        "notes VARCHAR",
+        "artifact_id VARCHAR",
+    ),
+    DatasetId.COMMON_CURRENCIES: (
+        "currency_id VARCHAR",
+        "currency_name VARCHAR",
+        "iso_code VARCHAR",
+        "symbol VARCHAR",
+        "artifact_id VARCHAR",
+    ),
+    DatasetId.HOUSEHOLD_TRANSACTIONS: (
+        "transaction_id VARCHAR",
+        "transaction_date VARCHAR",
+        "transaction_time VARCHAR",
+        "transaction_kind VARCHAR",
+        "asset_id VARCHAR",
+        "to_asset_id VARCHAR",
+        "category_id VARCHAR",
+        "currency_id VARCHAR",
+        "base_amount DOUBLE",
+        "local_amount DOUBLE",
+        "account_amount DOUBLE",
+        "exchange_rate DOUBLE",
+        "description VARCHAR",
+        "transfer_id VARCHAR",
+        "artifact_id VARCHAR",
+    ),
+    DatasetId.HOUSEHOLD_ACCOUNT_BALANCES: (
+        "opening_balance_id VARCHAR",
+        "balance_date VARCHAR",
+        "asset_id VARCHAR",
+        "currency_id VARCHAR",
+        "opening_amount DOUBLE",
+        "opening_amount_account DOUBLE",
+        "artifact_id VARCHAR",
+    ),
 }
 
 
@@ -421,6 +480,16 @@ def generate_bronze_ddl(plan: ExecutionPlan | None = None) -> str:
             continue
         body = ",\n".join(f"    {line}" for line in lines)
         ddl_statements.append(f"CREATE TABLE IF NOT EXISTS {contract.physical_table} (\n{body}\n);")
+
+    for contract in CANDIDATE_BRONZE_CONTRACT_REGISTRY:
+        if plan is not None and not plan.is_capability_active(CapabilityId.HOUSEHOLD_CORE):
+            continue
+        lines = BRONZE_TABLE_SCHEMAS.get(contract.dataset_id, ())
+        if not lines:
+            continue
+        body = ",\n".join(f"    {line}" for line in lines)
+        ddl_statements.append(f"CREATE TABLE IF NOT EXISTS {contract.physical_table} (\n{body}\n);")
+
     return "\n\n".join(ddl_statements)
 
 

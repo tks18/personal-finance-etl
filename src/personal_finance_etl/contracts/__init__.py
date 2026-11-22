@@ -72,6 +72,7 @@ from personal_finance_etl.contracts.capabilities import (
     CAPABILITY_COLUMN_INVENTORY,
     CAPABILITY_REGISTRY,
     COMMON_PRODUCED_SILVER_DATASETS,
+    FUTURE_CAPABILITY_CANDIDATES,
     CapabilityDescriptor,
     CapabilityGraph,
     CapabilityGraphError,
@@ -81,6 +82,7 @@ from personal_finance_etl.contracts.capabilities import (
     ExternalEnrichmentId,
     ResolvedCapabilityGraph,
     get_capability_columns,
+    get_future_capability_bronze_requirements,
 )
 from personal_finance_etl.contracts.dataset_collection import (
     DatasetCollection,
@@ -257,6 +259,7 @@ __all__ = [
     "FailureDomain",
     "GOLD_CONTRACT_DEPENDENCIES",
     "GoldContractDependency",
+    "FUTURE_CAPABILITY_CANDIDATES",
     "HouseholdCategoryKind",
     "HouseholdTransactionKind",
     "IdenticalEvidenceCollisionError",
@@ -320,6 +323,7 @@ __all__ = [
     "get_capability_columns",
     "get_columns_by_classification",
     "get_columns_by_disposition",
+    "get_future_capability_bronze_requirements",
     "get_gold_contract_dependency",
     "get_silver_column_disposition",
     "get_silver_contract_semantics",

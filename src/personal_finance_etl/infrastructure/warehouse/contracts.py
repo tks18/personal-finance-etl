@@ -81,6 +81,7 @@ __all__ = [
     "SyncStrategy",
     "WarehouseLayer",
     "BRONZE_CONTRACT_REGISTRY",
+    "CANDIDATE_BRONZE_CONTRACT_REGISTRY",
     "DATA_CONTRACT_REGISTRY",
 ]
 
@@ -160,6 +161,12 @@ _DATASET_SYNC_CATEGORY_MAP: dict[DatasetId, str] = {
     DatasetId.HOUSEHOLD_ASSETS: "sqlite_source",
     DatasetId.HOUSEHOLD_CURRENCY: "sqlite_source",
     DatasetId.HOUSEHOLD_INOUTCOME: "sqlite_source",
+    DatasetId.HOUSEHOLD_CATEGORIES: "sqlite_source",
+    DatasetId.HOUSEHOLD_ASSET_CATEGORIES: "sqlite_source",
+    DatasetId.HOUSEHOLD_ACCOUNTS: "sqlite_source",
+    DatasetId.COMMON_CURRENCIES: "sqlite_source",
+    DatasetId.HOUSEHOLD_TRANSACTIONS: "sqlite_source",
+    DatasetId.HOUSEHOLD_ACCOUNT_BALANCES: "opening_balances",
     DatasetId.MARKET_STOCK_HOLDINGS: "stock_pl",
     DatasetId.MARKET_MF_HOLDINGS: "mf_holdings",
     DatasetId.INVESTMENT_STOCK_ORDERS: "stock_orders",
@@ -334,6 +341,52 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
         False,
         IdentityRequirement.NONE,
         "Daily US Stock Closing Price Time-Series (Ticker, Date)",
+    ),
+]
+
+# Candidate canonical contracts for Phase 052 household migration (parallel coexistence)
+CANDIDATE_BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
+    BronzeDataContract(
+        DatasetId.HOUSEHOLD_CATEGORIES,
+        "bronze.household_categories",
+        True,
+        IdentityRequirement.REQUIRED,
+        "Household Canonical Category (category_id)",
+    ),
+    BronzeDataContract(
+        DatasetId.HOUSEHOLD_ASSET_CATEGORIES,
+        "bronze.household_asset_categories",
+        True,
+        IdentityRequirement.REQUIRED,
+        "Household Canonical Asset Category (asset_category_id)",
+    ),
+    BronzeDataContract(
+        DatasetId.HOUSEHOLD_ACCOUNTS,
+        "bronze.household_accounts",
+        True,
+        IdentityRequirement.REQUIRED,
+        "Household Canonical Account (asset_id)",
+    ),
+    BronzeDataContract(
+        DatasetId.COMMON_CURRENCIES,
+        "bronze.common_currencies",
+        True,
+        IdentityRequirement.REQUIRED,
+        "Common Currency (currency_id)",
+    ),
+    BronzeDataContract(
+        DatasetId.HOUSEHOLD_TRANSACTIONS,
+        "bronze.household_transactions",
+        True,
+        IdentityRequirement.REQUIRED,
+        "Household Canonical Transaction (transaction_id)",
+    ),
+    BronzeDataContract(
+        DatasetId.HOUSEHOLD_ACCOUNT_BALANCES,
+        "bronze.household_account_balances",
+        True,
+        IdentityRequirement.REQUIRED,
+        "Household Account Opening Balance (opening_balance_id)",
     ),
 ]
 

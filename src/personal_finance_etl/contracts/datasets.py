@@ -75,6 +75,8 @@ class DatasetId(StrEnum):
     # Transitional vocabulary for multi-source canonicalization; not yet runtime-authoritative.
     HOUSEHOLD_CATEGORIES = "household_categories"
     HOUSEHOLD_ASSET_CATEGORIES = "household_asset_categories"
+    HOUSEHOLD_ACCOUNTS = "household_accounts"
+    HOUSEHOLD_ACCOUNT_BALANCES = "household_account_balances"
     HOUSEHOLD_TRANSACTIONS = "household_transactions"
     INVESTMENT_TRANSACTIONS = "investment_transactions"
     INVESTMENT_HOLDINGS = "investment_holdings"
@@ -200,6 +202,8 @@ CANDIDATE_BRONZE_DATASETS: frozenset[DatasetId] = frozenset(
     {
         DatasetId.HOUSEHOLD_CATEGORIES,
         DatasetId.HOUSEHOLD_ASSET_CATEGORIES,
+        DatasetId.HOUSEHOLD_ACCOUNTS,
+        DatasetId.HOUSEHOLD_ACCOUNT_BALANCES,
         DatasetId.HOUSEHOLD_TRANSACTIONS,
         DatasetId.INVESTMENT_TRANSACTIONS,
         DatasetId.INVESTMENT_HOLDINGS,

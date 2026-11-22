@@ -26,6 +26,7 @@ from personal_finance_etl.contracts.semantic_inventory import (
 )
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     BRONZE_CONTRACT_REGISTRY,
+    CANDIDATE_BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
     PRE_BRONZE_CONTRACT_REGISTRY,
 )
@@ -88,7 +89,8 @@ def test_pre_bronze_contracts_unified_naming() -> None:
 def test_bronze_contracts_unified_naming() -> None:
     """Verify all Bronze contracts follow physical_table == bronze.{dataset_id.value}."""
     assert len(BRONZE_CONTRACT_REGISTRY) == 20
-    for contract in BRONZE_CONTRACT_REGISTRY:
+    assert len(CANDIDATE_BRONZE_CONTRACT_REGISTRY) == 6
+    for contract in list(BRONZE_CONTRACT_REGISTRY) + list(CANDIDATE_BRONZE_CONTRACT_REGISTRY):
         expected = f"bronze.{contract.dataset_id.value}"
         assert contract.physical_table == expected, (
             f"Bronze contract {contract.dataset_id.value} physical_table "

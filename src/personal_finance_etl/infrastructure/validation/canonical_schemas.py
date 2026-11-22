@@ -41,11 +41,17 @@ import polars as pl
 from personal_finance_etl.contracts.datasets import DatasetId
 
 __all__ = [
+    "CANONICAL_BRONZE_COMMON_CURRENCIES_SCHEMA",
+    "CANONICAL_BRONZE_HOUSEHOLD_ACCOUNTS_SCHEMA",
+    "CANONICAL_BRONZE_HOUSEHOLD_ACCOUNT_BALANCES_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_ASSETS_SCHEMA",
+    "CANONICAL_BRONZE_HOUSEHOLD_ASSET_CATEGORIES_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_ASSET_GROUP_SCHEMA",
+    "CANONICAL_BRONZE_HOUSEHOLD_CATEGORIES_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_CURRENCY_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA",
+    "CANONICAL_BRONZE_HOUSEHOLD_TRANSACTIONS_SCHEMA",
     "CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA",
     "CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MAPPING_SCHEMA",
     "CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MASTER_SCHEMA",
@@ -620,6 +626,106 @@ CANONICAL_BRONZE_MARKET_US_STOCK_PRICES_SCHEMA: pa.DataFrameSchema = pa.DataFram
     name="canonical_bronze_market_us_stock_prices",
 )
 
+# --- Candidate Canonical Household Schemas (Phase 052) ---
+
+CANONICAL_BRONZE_HOUSEHOLD_CATEGORIES_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "category_id": pa.Column(pl.String, nullable=False, unique=True, name="category_id"),
+        "category_name": pa.Column(pl.String, nullable=False, name="category_name"),
+        "category_kind": pa.Column(
+            pl.String,
+            nullable=False,
+            name="category_kind",
+        ),
+        "parent_category_id": pa.Column(pl.String, nullable=True, name="parent_category_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+    },
+    strict=True,
+    name="canonical_bronze_household_categories",
+)
+
+CANONICAL_BRONZE_HOUSEHOLD_ASSET_CATEGORIES_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "asset_category_id": pa.Column(
+            pl.String, nullable=False, unique=True, name="asset_category_id"
+        ),
+        "asset_category_name": pa.Column(pl.String, nullable=False, name="asset_category_name"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+    },
+    strict=True,
+    name="canonical_bronze_household_asset_categories",
+)
+
+CANONICAL_BRONZE_HOUSEHOLD_ACCOUNTS_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "asset_id": pa.Column(pl.String, nullable=False, unique=True, name="asset_id"),
+        "asset_name": pa.Column(pl.String, nullable=False, name="asset_name"),
+        "asset_category_id": pa.Column(pl.String, nullable=False, name="asset_category_id"),
+        "currency_id": pa.Column(pl.String, nullable=False, name="currency_id"),
+        "description": pa.Column(pl.String, nullable=True, name="description"),
+        "notes": pa.Column(pl.String, nullable=True, name="notes"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+    },
+    strict=True,
+    name="canonical_bronze_household_accounts",
+)
+
+CANONICAL_BRONZE_COMMON_CURRENCIES_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "currency_id": pa.Column(pl.String, nullable=False, unique=True, name="currency_id"),
+        "currency_name": pa.Column(pl.String, nullable=False, name="currency_name"),
+        "iso_code": pa.Column(pl.String, nullable=False, name="iso_code"),
+        "symbol": pa.Column(pl.String, nullable=True, name="symbol"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+    },
+    strict=True,
+    name="canonical_bronze_common_currencies",
+)
+
+CANONICAL_BRONZE_HOUSEHOLD_TRANSACTIONS_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "transaction_id": pa.Column(pl.String, nullable=False, unique=True, name="transaction_id"),
+        "transaction_date": pa.Column(pl.String, nullable=False, name="transaction_date"),
+        "transaction_time": pa.Column(pl.String, nullable=True, name="transaction_time"),
+        "transaction_kind": pa.Column(
+            pl.String,
+            nullable=False,
+            name="transaction_kind",
+        ),
+        "asset_id": pa.Column(pl.String, nullable=False, name="asset_id"),
+        "to_asset_id": pa.Column(pl.String, nullable=True, name="to_asset_id"),
+        "category_id": pa.Column(pl.String, nullable=True, name="category_id"),
+        "currency_id": pa.Column(pl.String, nullable=False, name="currency_id"),
+        "base_amount": pa.Column(pl.Float64, nullable=False, name="base_amount"),
+        "local_amount": pa.Column(pl.Float64, nullable=True, name="local_amount"),
+        "account_amount": pa.Column(pl.Float64, nullable=True, name="account_amount"),
+        "exchange_rate": pa.Column(pl.Float64, nullable=True, name="exchange_rate"),
+        "description": pa.Column(pl.String, nullable=True, name="description"),
+        "transfer_id": pa.Column(pl.String, nullable=True, name="transfer_id"),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+    },
+    strict=True,
+    name="canonical_bronze_household_transactions",
+)
+
+CANONICAL_BRONZE_HOUSEHOLD_ACCOUNT_BALANCES_SCHEMA: pa.DataFrameSchema = pa.DataFrameSchema(
+    columns={
+        "opening_balance_id": pa.Column(
+            pl.String, nullable=False, unique=True, name="opening_balance_id"
+        ),
+        "balance_date": pa.Column(pl.String, nullable=False, name="balance_date"),
+        "asset_id": pa.Column(pl.String, nullable=False, name="asset_id"),
+        "currency_id": pa.Column(pl.String, nullable=False, name="currency_id"),
+        "opening_amount": pa.Column(pl.Float64, nullable=False, name="opening_amount"),
+        "opening_amount_account": pa.Column(
+            pl.Float64, nullable=True, name="opening_amount_account"
+        ),
+        "artifact_id": pa.Column(pl.String, nullable=True, required=False, name="artifact_id"),
+    },
+    strict=True,
+    name="canonical_bronze_household_account_balances",
+)
+
 CANONICAL_BRONZE_SCHEMAS: dict[DatasetId, pa.DataFrameSchema] = {
     DatasetId.HOUSEHOLD_ZCATEGORY: CANONICAL_BRONZE_HOUSEHOLD_ZCATEGORY_SCHEMA,
     DatasetId.HOUSEHOLD_ASSET_GROUP: CANONICAL_BRONZE_HOUSEHOLD_ASSET_GROUP_SCHEMA,
@@ -627,6 +733,13 @@ CANONICAL_BRONZE_SCHEMAS: dict[DatasetId, pa.DataFrameSchema] = {
     DatasetId.HOUSEHOLD_CURRENCY: CANONICAL_BRONZE_HOUSEHOLD_CURRENCY_SCHEMA,
     DatasetId.HOUSEHOLD_INOUTCOME: CANONICAL_BRONZE_HOUSEHOLD_INOUTCOME_SCHEMA,
     DatasetId.HOUSEHOLD_OPENING_BALANCES: CANONICAL_BRONZE_HOUSEHOLD_OPENING_BALANCES_SCHEMA,
+    # --- Candidate Canonical Household Datasets (Phase 052) ---
+    DatasetId.HOUSEHOLD_CATEGORIES: CANONICAL_BRONZE_HOUSEHOLD_CATEGORIES_SCHEMA,
+    DatasetId.HOUSEHOLD_ASSET_CATEGORIES: CANONICAL_BRONZE_HOUSEHOLD_ASSET_CATEGORIES_SCHEMA,
+    DatasetId.HOUSEHOLD_ACCOUNTS: CANONICAL_BRONZE_HOUSEHOLD_ACCOUNTS_SCHEMA,
+    DatasetId.COMMON_CURRENCIES: CANONICAL_BRONZE_COMMON_CURRENCIES_SCHEMA,
+    DatasetId.HOUSEHOLD_TRANSACTIONS: CANONICAL_BRONZE_HOUSEHOLD_TRANSACTIONS_SCHEMA,
+    DatasetId.HOUSEHOLD_ACCOUNT_BALANCES: CANONICAL_BRONZE_HOUSEHOLD_ACCOUNT_BALANCES_SCHEMA,
     DatasetId.INVESTMENT_MF_ISIN_MAPPING: CANONICAL_BRONZE_INVESTMENT_MF_ISIN_MAPPING_SCHEMA,
     DatasetId.INVESTMENT_BENCHMARK_MAPPING: CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MAPPING_SCHEMA,
     DatasetId.INVESTMENT_BENCHMARK_MASTER: CANONICAL_BRONZE_INVESTMENT_BENCHMARK_MASTER_SCHEMA,

@@ -85,7 +85,7 @@ def test_migration_matrix_completeness_and_exact_count() -> None:
 def test_compiled_baseline_matches_migration_matrix_contract() -> None:
     """Verify that compiling baseline configuration matches the exact frozen migration matrix."""
     config = get_shan_baseline_source_configuration()
-    topology = config.compile_binding_topology()
+    topology = config.compile_binding_topology(include_candidate_household=False)
 
     assert len(topology.bindings) == 17
     assert len(topology.productions) == 17

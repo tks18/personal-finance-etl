@@ -247,6 +247,11 @@ class CanonicalProductionEngine:
         applied_identity = False
         id_col = "UID"
         if resolved_contract is not None:
+            if "(" in resolved_contract.grain and ")" in resolved_contract.grain:
+                grain_candidate = resolved_contract.grain.split("(")[1].split(")")[0].strip()
+                if "," not in grain_candidate and grain_candidate in assembled_df.columns:
+                    id_col = grain_candidate
+
             requires_id = resolved_contract.identity_requirement == IdentityRequirement.REQUIRED
             if isinstance(
                 identity_strategy, SourceFieldIdentity

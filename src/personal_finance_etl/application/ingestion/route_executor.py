@@ -125,8 +125,8 @@ def _build_predicate_expression(pred: PredicateRule) -> pl.Expr:
         expr = (col.is_not_null()) & (col.cast(pl.String).str.strip_chars() != "")
 
     if isinstance(pred, ExcludeWhen):
-        return ~expr
-    return expr
+        return ~(expr.fill_null(False))
+    return expr.fill_null(False)
 
 
 class RouteExecutor:

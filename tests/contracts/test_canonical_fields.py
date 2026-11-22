@@ -3,7 +3,7 @@
 Owns
 ----
 - Verification of CANONICAL_PROVENANCE_FIELDS stability.
-- Coverage test proving all 20 canonical Bronze datasets have registered target vocabularies.
+- Coverage test proving all 20 legacy and 6 candidate canonical Bronze datasets have registered target vocabularies.
 - Positive and negative tests for is_valid_canonical_field and get_canonical_fields.
 """
 
@@ -32,8 +32,9 @@ def test_all_bronze_datasets_registered() -> None:
     all_bronze_datasets = set(BRONZE_DATASET_ORIGIN_MAP.keys())
     registered_datasets = set(CANONICAL_BRONZE_FIELDS.keys())
 
-    assert registered_datasets == all_bronze_datasets
-    assert len(registered_datasets) == 20
+    assert all_bronze_datasets.issubset(registered_datasets)
+    assert len(registered_datasets) == 26
+    assert len(all_bronze_datasets) == 20
 
 
 def test_is_valid_canonical_field_domain_and_provenance() -> None:

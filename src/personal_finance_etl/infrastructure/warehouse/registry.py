@@ -21,6 +21,7 @@ from personal_finance_etl.contracts.datasets import DatasetId, IdentityRequireme
 from personal_finance_etl.contracts.sources import SourceBindingId
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     BRONZE_CONTRACT_REGISTRY,
+    CANDIDATE_BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
     MANAGED_WAREHOUSE_SCHEMAS,
     PERSISTED_DATA_SCHEMAS,
@@ -111,6 +112,9 @@ def get_bronze_contract_by_dataset_id(
     """
     val = str(dataset_id)
     for contract in BRONZE_CONTRACT_REGISTRY:
+        if contract.dataset_id.value == val or contract.dataset_id == dataset_id:
+            return contract
+    for contract in CANDIDATE_BRONZE_CONTRACT_REGISTRY:
         if contract.dataset_id.value == val or contract.dataset_id == dataset_id:
             return contract
     return None
@@ -282,7 +286,7 @@ def _validate_bronze_contracts() -> None:
     bronze_tables: set[str] = set()
     bronze_dataset_ids: set[str] = set()
 
-    for b_contract in BRONZE_CONTRACT_REGISTRY:
+    for b_contract in list(BRONZE_CONTRACT_REGISTRY) + list(CANDIDATE_BRONZE_CONTRACT_REGISTRY):
         if not b_contract.dataset_id:
             raise ValueError(f"Bronze contract {b_contract.physical_table} missing DatasetId.")
         ds_val = str(b_contract.dataset_id)

@@ -30,8 +30,14 @@ from personal_finance_etl.application.ingestion.canonical_production import (
 from personal_finance_etl.application.ingestion.route_compiler import RouteCompiler
 from personal_finance_etl.application.ingestion.route_executor import RouteExecutor
 from personal_finance_etl.application.pipeline.source_planner import DatasetPlan
-from personal_finance_etl.config.sources.binding_model import SourceBindingConfig
-from personal_finance_etl.config.sources.compiler import derive_source_binding_id
+from personal_finance_etl.config.sources.binding_model import (
+    CanonicalRouteConfig,
+    SourceBindingConfig,
+)
+from personal_finance_etl.config.sources.compiler import (
+    DEFAULT_COMPATIBILITY_ROUTE_ID,
+    derive_source_binding_id,
+)
 from personal_finance_etl.config.sources.identity import SourceFieldIdentity
 from personal_finance_etl.config.sources.loader import SourceConfiguration
 from personal_finance_etl.config.sources.model import (
@@ -499,81 +505,99 @@ class DatasetIngestionService:
                 raw_df = raw_df.with_columns(pl.lit(artifact_id).alias("artifact_id"))
 
             # 4. Canonical Route Interpretation & Row Identity Derivation
-            legacy_ds_config = _resolve_transitional_dataset_config(
-                binding_plan, b_cfg, legacy_ds_config, target_ds_id
-            )
+            routes_to_execute = list(b_cfg.routes) if (b_cfg and b_cfg.routes) else []
+            if not routes_to_execute:
+                routes_to_execute = [
+                    CanonicalRouteConfig(
+                        route_id=DEFAULT_COMPATIBILITY_ROUTE_ID,
+                        target_dataset_id=target_ds_id,
+                        enabled=True,
+                    )
+                ]
 
-            id_col = "UID"
-            if isinstance(
-                legacy_ds_config.identity, SourceFieldIdentity
-            ) and legacy_ds_config.identity.field not in ("Z_PK", "UID", "ZUID"):
-                id_col = legacy_ds_config.identity.field
+            primary_file_rows = 0
+            for r_idx, route in enumerate(routes_to_execute):
+                if not route.enabled:
+                    continue
 
-            matching_route = None
-            if b_cfg is not None and b_cfg.routes:
-                matching_route = next(
-                    (r for r in b_cfg.routes if r.target_dataset_id == target_ds_id),
-                    None,
-                )
+                route_target_ds = route.target_dataset_id
+                route_contract = get_bronze_contract_by_dataset_id(route_target_ds)
+                if route_contract is None:
+                    continue
 
-            if matching_route is not None and (
-                matching_route.predicates or matching_route.semantics
-            ):
-                compiled_route = self.route_compiler.compile(
-                    matching_route,
-                    binding_id=binding_plan.binding_id,
-                    available_source_columns=raw_df.columns,
-                )
-                mat_fragment = self.route_executor.execute(compiled_route, raw_df)
-                canonical_ds_plan = CanonicalDatasetPlan(
-                    dataset_id=target_ds_id,
-                    producer_kind=CanonicalProducerKind.SOURCE,
-                    assembly_mode=SourceAssemblyMode.DIRECT,
-                    is_required=True,
-                    is_enabled=True,
-                )
-                admitted_df, _ = self.production_engine.produce(
-                    plan=canonical_ds_plan,
-                    fragments=[mat_fragment],
-                    contract=bronze_contract,
-                    identity_strategy=legacy_ds_config.identity,
-                    run_id=run_id,
-                    allow_identical_collapse=True,
-                )
-                admitted_lf = admitted_df.lazy()
-            else:
-                admission_plan = self.admission_service.compile_admission_plan(
-                    dataset_config=legacy_ds_config,
-                    bronze_contract=bronze_contract,
-                    available_source_columns=raw_df.columns,
-                    id_column=id_col,
-                )
-                admitted_lf = self.admission_service.execute_admission(admission_plan, raw_df)
+                if (
+                    route.route_id != DEFAULT_COMPATIBILITY_ROUTE_ID
+                    or route.predicates
+                    or route.semantics
+                ):
+                    compiled_route = self.route_compiler.compile(
+                        route,
+                        binding_id=binding_plan.binding_id,
+                        available_source_columns=raw_df.columns,
+                    )
+                    mat_fragment = self.route_executor.execute(compiled_route, raw_df)
+                    canonical_ds_plan = CanonicalDatasetPlan(
+                        dataset_id=route_target_ds,
+                        producer_kind=CanonicalProducerKind.SOURCE,
+                        assembly_mode=SourceAssemblyMode.DIRECT,
+                        is_required=True,
+                        is_enabled=True,
+                    )
+                    admitted_df, _ = self.production_engine.produce(
+                        plan=canonical_ds_plan,
+                        fragments=[mat_fragment],
+                        contract=route_contract,
+                        identity_strategy=route.identity,
+                        run_id=run_id,
+                        allow_identical_collapse=True,
+                    )
+                    admitted_lf = admitted_df.lazy()
+                else:
+                    legacy_route_ds_cfg = _resolve_transitional_dataset_config(
+                        binding_plan, b_cfg, legacy_ds_config, route_target_ds
+                    )
+                    id_col = "UID"
+                    if isinstance(
+                        legacy_route_ds_cfg.identity, SourceFieldIdentity
+                    ) and legacy_route_ds_cfg.identity.field not in ("Z_PK", "UID", "ZUID"):
+                        id_col = legacy_route_ds_cfg.identity.field
 
-                # 5. Gate 2: Canonical Bronze Validation (CANONICAL_BRONZE)
-                canonical_schema = get_canonical_bronze_schema(target_ds_id)
-                canonical_ctx = ValidationContext(
-                    stage=ValidationStage.CANONICAL_BRONZE,
-                    dataset_id=target_ds_id,
-                    source_id=binding_plan.source_id,
-                    contract_id=bronze_contract.physical_table,
-                    run_id=run_id,
-                )
-                self.validator.validate(
-                    admitted_lf, canonical_schema, canonical_ctx, raise_on_error=True
-                )
+                    admission_plan = self.admission_service.compile_admission_plan(
+                        dataset_config=legacy_route_ds_cfg,
+                        bronze_contract=route_contract,
+                        available_source_columns=raw_df.columns,
+                        id_column=id_col,
+                    )
+                    admitted_lf = self.admission_service.execute_admission(admission_plan, raw_df)
 
-            # 6. Canonical Bronze Persistence
-            row_counts = bronze.upsert_table(
-                admitted_lf,
-                bronze_contract.physical_table,
-                [norm_filepath],
-                full_replace=bronze_contract.is_full_replace,
-            )
-            file_rows = row_counts.get(filename, 0)
-            total_rows_added = (
-                file_rows if bronze_contract.is_full_replace else (total_rows_added + file_rows)
-            )
+                    # Gate 2: Canonical Bronze Validation (CANONICAL_BRONZE)
+                    canonical_schema = get_canonical_bronze_schema(route_target_ds)
+                    canonical_ctx = ValidationContext(
+                        stage=ValidationStage.CANONICAL_BRONZE,
+                        dataset_id=route_target_ds,
+                        source_id=binding_plan.source_id,
+                        contract_id=route_contract.physical_table,
+                        run_id=run_id,
+                    )
+                    self.validator.validate(
+                        admitted_lf, canonical_schema, canonical_ctx, raise_on_error=True
+                    )
+
+                # Canonical Bronze Persistence
+                row_counts = bronze.upsert_table(
+                    admitted_lf,
+                    route_contract.physical_table,
+                    [norm_filepath],
+                    full_replace=route_contract.is_full_replace,
+                )
+                file_rows = row_counts.get(filename, 0)
+                if r_idx == 0:
+                    primary_file_rows = file_rows
+                    total_rows_added = (
+                        file_rows
+                        if route_contract.is_full_replace
+                        else (total_rows_added + file_rows)
+                    )
 
             if bronze_contract.is_full_replace:
                 bronze.db_manager.conn.execute(
@@ -583,14 +607,16 @@ class DatasetIngestionService:
 
             # 7. Control Plane & Meta Layer Synchronization
             cp.artifacts.mark_synced([norm_filepath])
-            meta_layer.register_file(norm_filepath, bronze_contract.sync_category, file_rows, cp)
+            meta_layer.register_file(
+                norm_filepath, bronze_contract.sync_category, primary_file_rows, cp
+            )
 
             file_progress = b_base + ((file_idx / max(total_files, 1)) * b_slot)
             self.emitter.emit_event(
                 event_code=EventCode.EXTRACTION_BATCH,
                 message=(
                     f"[{binding_plan.binding_id}] Ingested file ({file_idx}/{total_files}): "
-                    f"'{filename}' -> Pre-Bronze & Bronze ({file_rows:,} rows)"
+                    f"'{filename}' -> Pre-Bronze & Bronze ({primary_file_rows:,} rows)"
                 ),
                 severity=DiagnosticSeverity.INFO,
                 presentation_kind=PresentationKind.PROGRESS,
@@ -598,7 +624,7 @@ class DatasetIngestionService:
                 stage=EngineStage.EXTRACTING,
                 entity_type="File",
                 entity_id=filename,
-                rows=file_rows,
+                rows=primary_file_rows,
             )
 
         self.emitter.emit_event(
