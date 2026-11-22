@@ -59,6 +59,11 @@ from personal_finance_etl.config.sources.selectors import (
     ExcelSelector,
     SqliteSelector,
 )
+from personal_finance_etl.config.sources.semantics import (
+    PredicateRule,
+    SemanticMapRule,
+    SemanticRule,
+)
 
 __all__ = [
     "SourceConfigFingerprint",
@@ -176,6 +181,42 @@ def _canonicalize_normalization(rules: Sequence[NormalizationRule]) -> list[dict
             rule_dict["mapping"] = {k: norm.mapping[k] for k in sorted(norm.mapping)}
         norm_rules_data.append(rule_dict)
     return norm_rules_data
+
+
+def _canonicalize_predicates(rules: Sequence[PredicateRule]) -> list[dict[str, object]]:
+    """Serialize PredicateRule instances preserving sequential application order."""
+    pred_data: list[dict[str, object]] = []
+    for p in rules:
+        p_dict: dict[str, object] = {
+            "field": p.field,
+            "operator": p.operator.value,
+            "rule": p.rule,
+        }
+        if p.value is not None:
+            if isinstance(p.value, (list, tuple)):
+                p_dict["value"] = sorted(str(v) for v in p.value)
+            else:
+                p_dict["value"] = p.value
+        pred_data.append(p_dict)
+    return pred_data
+
+
+def _canonicalize_semantics(rules: Sequence[SemanticRule]) -> list[dict[str, object]]:
+    """Serialize SemanticRule instances preserving sequential application order."""
+    sem_data: list[dict[str, object]] = []
+    for s in rules:
+        s_dict: dict[str, object] = {
+            "field": s.field,
+            "rule": s.rule,
+        }
+        if isinstance(s, SemanticMapRule):
+            s_dict["default"] = s.default
+            s_dict["mapping"] = {k: s.mapping[k] for k in sorted(s.mapping)}
+            s_dict["on_unmapped"] = s.on_unmapped
+        else:
+            s_dict["value"] = s.value
+        sem_data.append(s_dict)
+    return sem_data
 
 
 def _canonicalize_change_detection(
@@ -326,7 +367,9 @@ def canonicalize_canonical_route(route: CanonicalRouteConfig) -> dict[str, objec
         "identity": _canonicalize_identity(route.identity),
         "mapping": _canonicalize_mapping(route.mapping),
         "normalization": _canonicalize_normalization(route.normalization),
+        "predicates": _canonicalize_predicates(route.predicates),
         "route_id": str(route.route_id),
+        "semantics": _canonicalize_semantics(route.semantics),
         "target_dataset_id": route.target_dataset_id.value,
     }
 

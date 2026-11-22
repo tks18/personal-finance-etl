@@ -28,6 +28,19 @@ from personal_finance_etl.application.ingestion.asset_strategies import (
     StockPipeline,
     USStockPipeline,
 )
+from personal_finance_etl.application.ingestion.canonical_integrity import (
+    BUILTIN_CANONICAL_INTEGRITY_RULES,
+    CanonicalIntegrityRule,
+    CanonicalIntegrityValidator,
+)
+from personal_finance_etl.application.ingestion.canonical_production import (
+    CanonicalProductionEngine,
+)
+from personal_finance_etl.application.ingestion.canonical_recipes import (
+    CanonicalRecipeRegistry,
+    RecipeRunner,
+    get_global_recipe_registry,
+)
 from personal_finance_etl.application.ingestion.identity import (
     IdentityCollisionDiagnostic,
     IdentityCollisionError,
@@ -43,23 +56,44 @@ from personal_finance_etl.application.ingestion.market_sync import (
     CurrencyPipeline,
     USMarketPipeline,
 )
+from personal_finance_etl.application.ingestion.route_compiler import (
+    CompiledRoutePlan,
+    RouteCompiler,
+)
+from personal_finance_etl.application.ingestion.route_executor import (
+    MaterializedCanonicalFragment,
+    RouteExecutor,
+    UnmappedSemanticValueError,
+)
 
 __all__ = [
     "AdmissionPlan",
     "AdmissionService",
     "AssetPipeline",
+    "BUILTIN_CANONICAL_INTEGRITY_RULES",
     "BenchmarkPipeline",
+    "CanonicalIntegrityRule",
+    "CanonicalIntegrityValidator",
+    "CanonicalProductionEngine",
+    "CanonicalRecipeRegistry",
+    "CompiledRoutePlan",
     "CurrencyPipeline",
     "IdentityCollisionDiagnostic",
     "IdentityCollisionError",
     "IdentityNotPermittedError",
     "IdentityPlan",
+    "MaterializedCanonicalFragment",
     "MissingIdentityFieldError",
     "MissingIdentityStrategyError",
     "MutualFundPipeline",
+    "RecipeRunner",
+    "RouteCompiler",
+    "RouteExecutor",
     "StockPipeline",
     "USMarketPipeline",
     "USStockPipeline",
+    "UnmappedSemanticValueError",
     "compile_identity_plan",
     "execute_identity_plan",
+    "get_global_recipe_registry",
 ]

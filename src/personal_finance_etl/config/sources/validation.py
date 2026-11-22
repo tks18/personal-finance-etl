@@ -22,6 +22,8 @@ from personal_finance_etl.config.sources.binding_model import (
 )
 from personal_finance_etl.config.sources.model import SourceConfig, SourceDatasetConfig
 from personal_finance_etl.config.sources.selectors import DatasetSelector
+from personal_finance_etl.config.sources.semantics import SemanticConstantRule
+from personal_finance_etl.contracts.canonical_fields import is_valid_canonical_field
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.sources import (
     CanonicalRouteId,
@@ -170,10 +172,42 @@ def validate_source_bindings(
         # 3. Validate selector-provider compatibility
         validate_source_selector_compatibility(source, binding.selector)
 
-        # 4. Catalog routes for cross-reference validation
+        # 4. Catalog routes and validate target canonical fields
+        declared_field_names: set[str] = (
+            {f.name for f in binding.fields} if binding.fields else set()
+        )
         binding_routes: dict[CanonicalRouteId, DatasetId] = {}
         for r in binding.routes:
             binding_routes[r.route_id] = r.target_dataset_id
+
+            # Validate target canonical fields
+            for m in r.mapping:
+                if not is_valid_canonical_field(r.target_dataset_id, m.canonical_field):
+                    raise ValueError(
+                        f"Route '{r.route_id}' in binding '{binding.binding_id}' maps to invalid canonical field "
+                        f"'{m.canonical_field}' for target dataset '{r.target_dataset_id}'."
+                    )
+            for s in r.semantics:
+                if isinstance(s, SemanticConstantRule):
+                    if not is_valid_canonical_field(r.target_dataset_id, s.field):
+                        raise ValueError(
+                            f"Route '{r.route_id}' in binding '{binding.binding_id}' injects invalid canonical field "
+                            f"'{s.field}' for target dataset '{r.target_dataset_id}'."
+                        )
+            # If source fields are explicitly declared, validate referenced fields
+            if declared_field_names:
+                for m in r.mapping:
+                    if m.source_field not in declared_field_names:
+                        raise ValueError(
+                            f"Route '{r.route_id}' in binding '{binding.binding_id}' references unknown source field "
+                            f"'{m.source_field}' not declared in binding fields."
+                        )
+                for p in r.predicates:
+                    if p.field not in declared_field_names:
+                        raise ValueError(
+                            f"Predicate in route '{r.route_id}' of binding '{binding.binding_id}' references unknown field "
+                            f"'{p.field}'."
+                        )
         routes_by_binding[binding.binding_id] = binding_routes
 
     # 5. Validate productions if provided

@@ -246,6 +246,8 @@ class MappingPreviewResult:
     provenance_fields: tuple[str, ...]
     source_binding_id: str | None = None
     canonical_route_id: str | None = None
+    predicates: tuple[str, ...] = ()
+    semantic_rules: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

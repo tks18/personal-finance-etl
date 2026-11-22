@@ -34,7 +34,7 @@ from personal_finance_etl.config.sources.normalization import (
 )
 from personal_finance_etl.contracts.canonical_fields import get_canonical_fields
 
-__all__ = ["NormalizationExecutor"]
+__all__ = ["NormalizationExecutor", "build_rule_expression"]
 
 _DTYPE_MAP: dict[CanonicalDtype, type[pl.DataType]] = {
     "string": pl.String,
@@ -45,7 +45,7 @@ _DTYPE_MAP: dict[CanonicalDtype, type[pl.DataType]] = {
 }
 
 
-def _build_rule_expression(rule: NormalizationRule) -> pl.Expr:
+def build_rule_expression(rule: NormalizationRule) -> pl.Expr:
     """Build a pure, vectorized Polars expression for a single normalization rule.
 
     Parameters
@@ -93,6 +93,9 @@ def _build_rule_expression(rule: NormalizationRule) -> pl.Expr:
         return pl.lit(rule.value).alias(rule.field)
 
     return expr.alias(rule.field)
+
+
+_build_rule_expression = build_rule_expression
 
 
 class NormalizationExecutor:
