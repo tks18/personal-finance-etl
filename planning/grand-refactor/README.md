@@ -94,7 +94,7 @@ If code evidence contradicts a phase, stop and amend the owning phase or archite
 | 048 | Binding-aware source planning and Pre-Bronze cutover | v10.3.3 | [x] |
 | 049 | Semantic interpretation and canonical route execution | v10.3.4 | [x] |
 | 050 | Canonical production engine and Gate-2 integration | v10.3.5 | [x] |
-| 051 | Canonical satisfiability planner and production graph | v10.4.0 | [ ] |
+| 051 | Canonical satisfiability planner and production graph | v10.4.0 | [x] |
 | 052 | Household canonical evidence migration | v10.4.1 | [ ] |
 | 053 | Household Silver cutover and source-assumption demolition | v10.4.2 | [ ] |
 | 054 | Investment, reference and provider canonical evidence migration | v10.5.0 | [ ] |
