@@ -25,21 +25,31 @@ import polars as pl
 
 from personal_finance_etl.application.ingestion.admission import AdmissionService
 from personal_finance_etl.application.pipeline.source_planner import DatasetPlan
+from personal_finance_etl.config.sources.binding_model import SourceBindingConfig
+from personal_finance_etl.config.sources.compiler import derive_source_binding_id
 from personal_finance_etl.config.sources.identity import SourceFieldIdentity
 from personal_finance_etl.config.sources.loader import SourceConfiguration
+from personal_finance_etl.config.sources.model import (
+    SourceDatasetConfig,
+    SourceFieldDeclaration,
+)
 from personal_finance_etl.config.sources.selectors import (
     CsvSelector,
     ExcelSelector,
     SqliteSelector,
 )
 from personal_finance_etl.contracts.application import EngineStage
+from personal_finance_etl.contracts.canonical_plans import SourceBindingPlan
 from personal_finance_etl.contracts.datasets import DatasetId
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
     PresentationKind,
 )
-from personal_finance_etl.contracts.sources import ProviderType
+from personal_finance_etl.contracts.sources import (
+    CanonicalRouteId,
+    ProviderType,
+)
 from personal_finance_etl.contracts.validation import (
     DataFrameValidator,
     ValidationContext,
@@ -76,8 +86,9 @@ from personal_finance_etl.infrastructure.warehouse.contracts import (
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 from personal_finance_etl.infrastructure.warehouse.pre_bronze import PreBronzeLayer
 from personal_finance_etl.infrastructure.warehouse.registry import (
+    create_pre_bronze_contract_for_binding,
     get_bronze_contract_by_dataset_id,
-    get_pre_bronze_contract_by_dataset_id,
+    get_pre_bronze_contract_by_binding_id,
 )
 
 __all__ = ["DatasetIngestionService"]
@@ -86,20 +97,23 @@ diagnostics = get_observability_diagnostics(__name__)
 
 
 def _resolve_target_paths(
-    dataset_plan: DatasetPlan,
+    plan: SourceBindingPlan | DatasetPlan,
     bronze_contract: BronzeDataContract,
     actionable_files: Sequence[str] | dict[str, list[str]],
+    target_dataset_id: DatasetId | None = None,
 ) -> list[str]:
-    """Resolve target actionable filepaths for a dataset plan.
+    """Resolve target actionable filepaths for a binding or dataset plan.
 
     Parameters
     ----------
-    dataset_plan : DatasetPlan
-        Compiled execution plan for the target dataset.
+    plan : SourceBindingPlan | DatasetPlan
+        Compiled execution plan for the target stream or dataset.
     bronze_contract : BronzeDataContract
         Canonical Bronze persistence contract.
     actionable_files : Sequence[str] | dict[str, list[str]]
         Category-mapped actionable paths or explicit list of paths.
+    target_dataset_id : DatasetId | None, default None
+        Optional target canonical dataset identifier override.
 
     Returns
     -------
@@ -110,26 +124,105 @@ def _resolve_target_paths(
         return sorted(set(actionable_files))
 
     target_paths: list[str] = []
-    ds_val = dataset_plan.dataset_id.value
-    if ds_val in actionable_files:
+    b_id_str: str | None = None
+    if isinstance(plan, SourceBindingPlan):
+        b_id_str = str(plan.binding_id)
+        if b_id_str in actionable_files:
+            target_paths.extend(actionable_files[b_id_str])
+
+    ds_id = target_dataset_id or (getattr(plan, "dataset_id", None))
+    ds_val = ds_id.value if ds_id is not None else ""
+    if ds_val and ds_val in actionable_files:
         target_paths.extend(actionable_files[ds_val])
+
     cat = getattr(bronze_contract, "sync_category", None)
-    if cat and cat in actionable_files and cat != ds_val:
+    if cat and cat in actionable_files and cat != ds_val and cat != b_id_str:
         target_paths.extend(actionable_files[cat])
 
     if not target_paths:
         for leg_key, files in actionable_files.items():
-            if (
-                (leg_key == "sqlite_source" and dataset_plan.provider_type == ProviderType.SQLITE)
-                or (
-                    leg_key == "stock_pl"
-                    and dataset_plan.dataset_id == DatasetId.MARKET_STOCK_HOLDINGS
-                )
-                or (leg_key in ds_val)
-            ):
+            matches_sqlite = (
+                leg_key == "sqlite_source" and plan.provider_type == ProviderType.SQLITE
+            )
+            matches_stock_pl = leg_key == "stock_pl" and ds_id == DatasetId.MARKET_STOCK_HOLDINGS
+            matches_key = bool(ds_val and leg_key in ds_val) or bool(
+                b_id_str and leg_key in b_id_str
+            )
+            if matches_sqlite or matches_stock_pl or matches_key:
                 target_paths.extend(files)
 
     return sorted(set(target_paths))
+
+
+def _resolve_transitional_dataset_config(
+    binding_plan: SourceBindingPlan,
+    b_cfg: SourceBindingConfig | None,
+    legacy_ds_config: SourceDatasetConfig | None,
+    target_ds_id: DatasetId,
+) -> SourceDatasetConfig:
+    """Resolve or synthesize a transitional dataset config for admission."""
+    if legacy_ds_config is not None:
+        return legacy_ds_config
+    if b_cfg is not None and b_cfg.routes:
+        return SourceDatasetConfig(
+            dataset_id=target_ds_id,
+            source_id=binding_plan.source_id,
+            selector=b_cfg.selector,
+            fields=b_cfg.fields,
+            mapping=b_cfg.routes[0].mapping,
+            normalization=b_cfg.routes[0].normalization,
+            identity=b_cfg.routes[0].identity,
+        )
+    raise ValueError(
+        f"Transitional admission requires legacy dataset config for {binding_plan.binding_id}"
+    )
+
+
+def _align_declared_field_types(
+    raw_df: pl.DataFrame,
+    declared_fields: Sequence[SourceFieldDeclaration],
+) -> pl.DataFrame:
+    """Align column types inferred by Polars with declared source field dtypes."""
+    field_types = {f.name: f.data_type.strip().lower() for f in declared_fields}
+    cols_to_cast: list[pl.Expr] = []
+    for col in raw_df.columns:
+        if col in field_types:
+            norm_t = field_types[col]
+            target_dtype = POLARS_TYPE_MAP.get(norm_t)
+            if target_dtype is not None:
+                current_dtype = raw_df[col].dtype
+                if current_dtype == pl.Null:
+                    cols_to_cast.append(pl.col(col).cast(target_dtype))
+                elif target_dtype.is_float() and current_dtype.is_integer():
+                    cols_to_cast.append(pl.col(col).cast(pl.Float64))
+                elif target_dtype.is_(pl.String) and not current_dtype.is_(pl.String):
+                    cols_to_cast.append(pl.col(col).cast(pl.String))
+                elif (
+                    target_dtype.is_integer()
+                    and current_dtype.is_integer()
+                    and current_dtype != target_dtype
+                ):
+                    cols_to_cast.append(pl.col(col).cast(target_dtype))
+                elif (
+                    (target_dtype.is_integer() or target_dtype.is_float())
+                    and current_dtype.is_(pl.String)
+                    and (raw_df[col].null_count() == len(raw_df) or raw_df[col].is_null().all())
+                ):
+                    cols_to_cast.append(pl.col(col).cast(target_dtype))
+                elif target_dtype.is_integer() and current_dtype.is_float():
+                    cols_to_cast.append(pl.col(col).cast(target_dtype))
+                elif target_dtype == pl.Date and current_dtype.is_(pl.String):
+                    cols_to_cast.append(
+                        pl.coalesce(
+                            pl.col(col).str.to_date("%Y-%m-%d", strict=False),
+                            pl.col(col).str.to_date("%d-%m-%Y", strict=False),
+                            pl.col(col).str.to_date("%Y/%m/%d", strict=False),
+                            pl.col(col).str.to_date("%d/%m/%Y", strict=False),
+                        )
+                    )
+    if cols_to_cast:
+        return raw_df.with_columns(cols_to_cast)
+    return raw_df
 
 
 class DatasetIngestionService:
@@ -183,6 +276,296 @@ class DatasetIngestionService:
             return disk_path.read_bytes()
         raise FileNotFoundError(f"Binary payload not found in Control Plane or disk: {filepath}")
 
+    def ingest_binding(
+        self,
+        binding_plan: SourceBindingPlan,
+        source_config: SourceConfiguration,
+        cp: ControlPlane,
+        pre_bronze: PreBronzeLayer,
+        bronze: BronzeLayer,
+        meta_layer: MetaLayer,
+        actionable_files: Sequence[str] | dict[str, list[str]],
+        run_id: str,
+        current_binding_idx: int = 0,
+        total_bindings: int = 1,
+        dataset_plan: DatasetPlan | None = None,
+    ) -> bool:
+        """Execute the end-to-end generalized ingestion pipeline for a physical source binding.
+
+        Parameters
+        ----------
+        binding_plan : SourceBindingPlan
+            Compiled execution plan for the target physical binding.
+        source_config : SourceConfiguration
+            Authoritative root source configuration.
+        cp : ControlPlane
+            Active operational control plane.
+        pre_bronze : PreBronzeLayer
+            Pre-Bronze DuckDB persistence layer.
+        bronze : BronzeLayer
+            Bronze DuckDB persistence layer.
+        meta_layer : MetaLayer
+            Metadata registration layer.
+        actionable_files : Sequence[str] | dict[str, list[str]]
+            Category-mapped actionable paths or explicit list of paths.
+        run_id : str
+            Active pipeline execution ID.
+        current_binding_idx : int, default 0
+            Zero-based index of current binding within active ingestion phase.
+        total_bindings : int, default 1
+            Total number of bindings scheduled for ingestion in active phase.
+        dataset_plan : DatasetPlan | None, default None
+            Optional transitional dataset plan for backward compatibility.
+
+        Returns
+        -------
+        bool
+            True if one or more files were ingested, False if skipped (no actionable files).
+        """
+        pb_contract: PreBronzeDataContract | None = get_pre_bronze_contract_by_binding_id(
+            binding_plan.binding_id
+        )
+        if pb_contract is None:
+            pb_contract = create_pre_bronze_contract_for_binding(binding_plan)
+
+        topology = source_config.compile_binding_topology()
+        b_cfg = topology.get_binding(binding_plan.binding_id)
+
+        target_ds_id: DatasetId | None = None
+        if b_cfg and b_cfg.routes:
+            target_ds_id = b_cfg.routes[0].target_dataset_id
+        elif dataset_plan is not None:
+            target_ds_id = dataset_plan.dataset_id
+        elif pb_contract.dataset_id is not None:
+            target_ds_id = pb_contract.dataset_id
+
+        if target_ds_id is None:
+            raise ValueError(
+                f"Cannot resolve target canonical DatasetId for binding '{binding_plan.binding_id}'"
+            )
+
+        bronze_contract: BronzeDataContract | None = get_bronze_contract_by_dataset_id(target_ds_id)
+        if bronze_contract is None:
+            raise ValueError(f"No BronzeDataContract found for dataset {target_ds_id}")
+
+        legacy_ds_config = source_config.get_dataset_binding(target_ds_id)
+
+        target_paths = _resolve_target_paths(
+            binding_plan, bronze_contract, actionable_files, target_dataset_id=target_ds_id
+        )
+
+        if not target_paths:
+            diagnostics.debug(
+                "Generalized Ingestion: No actionable files for %s (%s). Skipping.",
+                str(binding_plan.binding_id),
+                bronze_contract.sync_category,
+            )
+            return False
+
+        b_slot = 0.20 / max(total_bindings, 1)
+        b_base = 0.20 + (current_binding_idx * b_slot)
+
+        diagnostics.info(
+            "Generalized Ingestion: Ingesting binding '%s' (target '%s') from %d actionable file(s)...",
+            str(binding_plan.binding_id),
+            target_ds_id.value,
+            len(target_paths),
+        )
+        self.emitter.emit_event(
+            event_code=EventCode.EXTRACTION_START,
+            message=(
+                f"Ingesting binding '{binding_plan.binding_id}' from {len(target_paths)} "
+                f"actionable file(s)..."
+            ),
+            severity=DiagnosticSeverity.INFO,
+            presentation_kind=PresentationKind.STEP,
+            progress=b_base,
+            stage=EngineStage.EXTRACTING,
+            entity_type="binding",
+            entity_id=str(binding_plan.binding_id),
+            rows=len(target_paths),
+        )
+
+        total_rows_added = 0
+        total_files = len(target_paths)
+        for file_idx, filepath in enumerate(target_paths, 1):
+            norm_filepath = filepath.replace("\\", "/")
+            filename = os.path.basename(norm_filepath)
+            folder_path = os.path.dirname(norm_filepath)
+            artifact_id = generate_file_id(norm_filepath)
+
+            # 1. Provider Extraction
+            raw_bytes = self._resolve_raw_bytes(norm_filepath, cp)
+            selector = binding_plan.selector
+            if isinstance(selector, SqliteSelector):
+                table_name = selector.table_name
+                extractor = SQLiteExtractor(folder_path)
+                source_lazy = extractor.extract_table(filename, folder_path, raw_bytes, table_name)
+            elif isinstance(selector, CsvSelector):
+                csv_extractor = CSVExtractor(folder_path)
+                source_lazy = csv_extractor.extract_csv(
+                    filename,
+                    folder_path,
+                    raw_bytes,
+                    delimiter=selector.delimiter,
+                    encoding=selector.encoding,
+                    has_header=selector.has_header,
+                )
+            elif isinstance(selector, ExcelSelector):
+                excel_extractor = ExcelExtractor(folder_path)
+                category = (
+                    "Indian MF"
+                    if target_ds_id
+                    in (DatasetId.MARKET_MF_HOLDINGS, DatasetId.INVESTMENT_MF_ORDERS)
+                    else "Indian Stocks"
+                    if target_ds_id
+                    in (DatasetId.MARKET_STOCK_HOLDINGS, DatasetId.INVESTMENT_STOCK_ORDERS)
+                    else "US Stocks"
+                    if target_ds_id == DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS
+                    else None
+                )
+                source_lazy = excel_extractor.extract_sheet(
+                    filename,
+                    folder_path,
+                    raw_bytes,
+                    sheet_name=selector.sheet_name,
+                    candidate_sheets=selector.candidate_sheets,
+                    header_row=selector.header_row,
+                    header_anchor=selector.header_anchor,
+                    anchor_offset=selector.anchor_offset,
+                    stop_on_blank=selector.stop_on_blank,
+                    file_category=category,
+                )
+            else:
+                raise TypeError(
+                    f"Unsupported selector type for file ingestion: {type(selector).__name__}"
+                )
+
+            raw_df = source_lazy.collect()
+
+            # Align column types inferred by Polars with declared source field dtypes
+            declared_fields = (
+                b_cfg.fields
+                if b_cfg and b_cfg.fields
+                else (legacy_ds_config.fields if legacy_ds_config else [])
+            )
+            raw_df = _align_declared_field_types(raw_df, declared_fields)
+
+            # 2. Gate 1: Source Validation (PRE_BRONZE)
+            schema_holder = b_cfg if b_cfg is not None else legacy_ds_config
+            if schema_holder is None:
+                raise ValueError(f"No source configuration available for {binding_plan.binding_id}")
+            source_schema = compile_source_schema(schema_holder)
+            source_ctx = ValidationContext(
+                stage=ValidationStage.PRE_BRONZE,
+                dataset_id=target_ds_id,
+                source_id=binding_plan.source_id,
+                contract_id=f"pre_bronze_{binding_plan.binding_id}",
+                run_id=run_id,
+                binding_id=binding_plan.binding_id,
+            )
+            self.validator.validate(raw_df, source_schema, source_ctx, raise_on_error=True)
+
+            # 3. Pre-Bronze Persistence
+            if pb_contract.sync_strategy == SyncStrategy.FULL_REPLACE:
+                pre_bronze.write_full_replace(
+                    pb_contract, raw_df, artifact_id=artifact_id, source_id=binding_plan.source_id
+                )
+            else:
+                pre_bronze.write_incremental(
+                    pb_contract, raw_df, artifact_id=artifact_id, source_id=binding_plan.source_id
+                )
+
+            # Ensure artifact_id is present for canonical Bronze admission
+            if "artifact_id" not in raw_df.columns:
+                raw_df = raw_df.with_columns(pl.lit(artifact_id).alias("artifact_id"))
+
+            # 4. Admission Normalization & Row Identity Derivation
+            legacy_ds_config = _resolve_transitional_dataset_config(
+                binding_plan, b_cfg, legacy_ds_config, target_ds_id
+            )
+
+            id_col = "UID"
+            if isinstance(
+                legacy_ds_config.identity, SourceFieldIdentity
+            ) and legacy_ds_config.identity.field not in ("Z_PK", "UID", "ZUID"):
+                id_col = legacy_ds_config.identity.field
+
+            admission_plan = self.admission_service.compile_admission_plan(
+                dataset_config=legacy_ds_config,
+                bronze_contract=bronze_contract,
+                available_source_columns=raw_df.columns,
+                id_column=id_col,
+            )
+            admitted_lf = self.admission_service.execute_admission(admission_plan, raw_df)
+
+            # 5. Gate 2: Canonical Bronze Validation (CANONICAL_BRONZE)
+            canonical_schema = get_canonical_bronze_schema(target_ds_id)
+            canonical_ctx = ValidationContext(
+                stage=ValidationStage.CANONICAL_BRONZE,
+                dataset_id=target_ds_id,
+                source_id=binding_plan.source_id,
+                contract_id=bronze_contract.physical_table,
+                run_id=run_id,
+            )
+            self.validator.validate(
+                admitted_lf, canonical_schema, canonical_ctx, raise_on_error=True
+            )
+
+            # 6. Canonical Bronze Persistence
+            row_counts = bronze.upsert_table(
+                admitted_lf,
+                bronze_contract.physical_table,
+                [norm_filepath],
+                full_replace=bronze_contract.is_full_replace,
+            )
+            file_rows = row_counts.get(filename, 0)
+            total_rows_added = (
+                file_rows if bronze_contract.is_full_replace else (total_rows_added + file_rows)
+            )
+
+            if bronze_contract.is_full_replace:
+                bronze.db_manager.conn.execute(
+                    "DELETE FROM meta.m_File_Registry WHERE file_category = ?",
+                    [bronze_contract.sync_category],
+                )
+
+            # 7. Control Plane & Meta Layer Synchronization
+            cp.artifacts.mark_synced([norm_filepath])
+            meta_layer.register_file(norm_filepath, bronze_contract.sync_category, file_rows, cp)
+
+            file_progress = b_base + ((file_idx / max(total_files, 1)) * b_slot)
+            self.emitter.emit_event(
+                event_code=EventCode.EXTRACTION_BATCH,
+                message=(
+                    f"[{binding_plan.binding_id}] Ingested file ({file_idx}/{total_files}): "
+                    f"'{filename}' -> Pre-Bronze & Bronze ({file_rows:,} rows)"
+                ),
+                severity=DiagnosticSeverity.INFO,
+                presentation_kind=PresentationKind.PROGRESS,
+                progress=file_progress,
+                stage=EngineStage.EXTRACTING,
+                entity_type="File",
+                entity_id=filename,
+                rows=file_rows,
+            )
+
+        self.emitter.emit_event(
+            event_code=EventCode.BRONZE_UPSERT,
+            message=(
+                f"Bronze: Table '{bronze_contract.physical_table}' upserted "
+                f"{total_rows_added} rows from {len(target_paths)} files via generalized admission."
+            ),
+            severity=DiagnosticSeverity.INFO,
+            presentation_kind=PresentationKind.SUCCESS,
+            progress=b_base + b_slot,
+            stage=EngineStage.EXTRACTING,
+            entity_type="Table",
+            entity_id=bronze_contract.physical_table,
+            rows=total_rows_added,
+        )
+        return True
+
     def ingest_dataset(
         self,
         dataset_plan: DatasetPlan,
@@ -197,6 +580,10 @@ class DatasetIngestionService:
         total_datasets: int = 1,
     ) -> bool:
         """Execute the end-to-end generalized ingestion pipeline for a single dataset.
+
+        Removal Owner
+        -------------
+        Phase 055 (when DatasetPlan physical acquisition is decommissioned).
 
         Parameters
         ----------
@@ -233,258 +620,27 @@ class DatasetIngestionService:
         NotImplementedError
             If selector provider type is unsupported.
         """
-        bronze_contract: BronzeDataContract | None = get_bronze_contract_by_dataset_id(
-            dataset_plan.dataset_id
+        b_id = derive_source_binding_id(dataset_plan.source_id, dataset_plan.dataset_id)
+        binding_plan = SourceBindingPlan(
+            binding_id=b_id,
+            source_id=dataset_plan.source_id,
+            provider_type=dataset_plan.provider_type,
+            location=dataset_plan.location,
+            enabled=dataset_plan.is_enabled,
+            selector=dataset_plan.selector,
+            change_detection=dataset_plan.change_detection,
+            route_ids=(CanonicalRouteId("direct"),),
         )
-        if bronze_contract is None:
-            raise ValueError(f"No BronzeDataContract found for dataset {dataset_plan.dataset_id}")
-
-        pb_contract: PreBronzeDataContract | None = get_pre_bronze_contract_by_dataset_id(
-            dataset_plan.dataset_id
+        return self.ingest_binding(
+            binding_plan=binding_plan,
+            source_config=source_config,
+            cp=cp,
+            pre_bronze=pre_bronze,
+            bronze=bronze,
+            meta_layer=meta_layer,
+            actionable_files=actionable_files,
+            run_id=run_id,
+            current_binding_idx=current_dataset_idx,
+            total_bindings=total_datasets,
+            dataset_plan=dataset_plan,
         )
-        if pb_contract is None:
-            raise ValueError(
-                f"No PreBronzeDataContract found for dataset {dataset_plan.dataset_id}"
-            )
-
-        ds_config = source_config.get_dataset_binding(dataset_plan.dataset_id)
-        if ds_config is None:
-            raise ValueError(f"No SourceDatasetConfig found for dataset {dataset_plan.dataset_id}")
-
-        target_paths = _resolve_target_paths(dataset_plan, bronze_contract, actionable_files)
-
-        if not target_paths:
-            diagnostics.debug(
-                "Generalized Ingestion: No actionable files for %s (%s). Skipping.",
-                dataset_plan.dataset_id.value,
-                bronze_contract.sync_category,
-            )
-            return False
-
-        ds_slot = 0.20 / max(total_datasets, 1)
-        ds_base = 0.20 + (current_dataset_idx * ds_slot)
-
-        diagnostics.info(
-            "Generalized Ingestion: Ingesting dataset '%s' from %d actionable file(s)...",
-            dataset_plan.dataset_id.value,
-            len(target_paths),
-        )
-        self.emitter.emit_event(
-            event_code=EventCode.EXTRACTION_START,
-            message=(
-                f"Ingesting dataset '{dataset_plan.dataset_id.value}' from {len(target_paths)} "
-                f"actionable file(s)..."
-            ),
-            severity=DiagnosticSeverity.INFO,
-            presentation_kind=PresentationKind.STEP,
-            progress=ds_base,
-            stage=EngineStage.EXTRACTING,
-            entity_type="dataset",
-            entity_id=dataset_plan.dataset_id.value,
-            rows=len(target_paths),
-        )
-
-        total_rows_added = 0
-        total_files = len(target_paths)
-        for file_idx, filepath in enumerate(target_paths, 1):
-            norm_filepath = filepath.replace("\\", "/")
-            filename = os.path.basename(norm_filepath)
-            folder_path = os.path.dirname(norm_filepath)
-            artifact_id = generate_file_id(norm_filepath)
-
-            # 1. Provider Extraction
-            raw_bytes = self._resolve_raw_bytes(norm_filepath, cp)
-            if isinstance(dataset_plan.selector, SqliteSelector):
-                table_name = dataset_plan.selector.table_name
-                extractor = SQLiteExtractor(folder_path)
-                source_lazy = extractor.extract_table(filename, folder_path, raw_bytes, table_name)
-            elif isinstance(dataset_plan.selector, CsvSelector):
-                csv_extractor = CSVExtractor(folder_path)
-                source_lazy = csv_extractor.extract_csv(
-                    filename,
-                    folder_path,
-                    raw_bytes,
-                    delimiter=dataset_plan.selector.delimiter,
-                    encoding=dataset_plan.selector.encoding,
-                    has_header=dataset_plan.selector.has_header,
-                )
-            elif isinstance(dataset_plan.selector, ExcelSelector):
-                excel_extractor = ExcelExtractor(folder_path)
-                category = (
-                    "Indian MF"
-                    if dataset_plan.dataset_id
-                    in (DatasetId.MARKET_MF_HOLDINGS, DatasetId.INVESTMENT_MF_ORDERS)
-                    else "Indian Stocks"
-                    if dataset_plan.dataset_id
-                    in (DatasetId.MARKET_STOCK_HOLDINGS, DatasetId.INVESTMENT_STOCK_ORDERS)
-                    else "US Stocks"
-                    if dataset_plan.dataset_id == DatasetId.INVESTMENT_US_STOCK_TRANSACTIONS
-                    else None
-                )
-                source_lazy = excel_extractor.extract_sheet(
-                    filename,
-                    folder_path,
-                    raw_bytes,
-                    sheet_name=dataset_plan.selector.sheet_name,
-                    candidate_sheets=dataset_plan.selector.candidate_sheets,
-                    header_row=dataset_plan.selector.header_row,
-                    header_anchor=dataset_plan.selector.header_anchor,
-                    anchor_offset=dataset_plan.selector.anchor_offset,
-                    stop_on_blank=dataset_plan.selector.stop_on_blank,
-                    file_category=category,
-                )
-            else:
-                raise TypeError(
-                    f"Unsupported selector type for file ingestion: {type(dataset_plan.selector).__name__}"
-                )
-
-            raw_df = source_lazy.collect()
-
-            # Align column types inferred by Polars with declared source field dtypes
-            cols_to_cast: list[pl.Expr] = []
-            field_types = {f.name: f.data_type.strip().lower() for f in ds_config.fields}
-            for col in raw_df.columns:
-                if col in field_types:
-                    norm_t = field_types[col]
-                    target_dtype = POLARS_TYPE_MAP.get(norm_t)
-                    if target_dtype is not None:
-                        current_dtype = raw_df[col].dtype
-                        if current_dtype == pl.Null:
-                            cols_to_cast.append(pl.col(col).cast(target_dtype))
-                        elif target_dtype.is_float() and current_dtype.is_integer():
-                            cols_to_cast.append(pl.col(col).cast(pl.Float64))
-                        elif target_dtype.is_(pl.String) and not current_dtype.is_(pl.String):
-                            cols_to_cast.append(pl.col(col).cast(pl.String))
-                        elif (
-                            target_dtype.is_integer()
-                            and current_dtype.is_integer()
-                            and current_dtype != target_dtype
-                        ):
-                            cols_to_cast.append(pl.col(col).cast(target_dtype))
-                        elif (
-                            (target_dtype.is_integer() or target_dtype.is_float())
-                            and current_dtype.is_(pl.String)
-                            and (
-                                raw_df[col].null_count() == len(raw_df)
-                                or raw_df[col].is_null().all()
-                            )
-                        ):
-                            cols_to_cast.append(pl.col(col).cast(target_dtype))
-                        elif target_dtype.is_integer() and current_dtype.is_float():
-                            cols_to_cast.append(pl.col(col).cast(target_dtype))
-                        elif target_dtype == pl.Date and current_dtype.is_(pl.String):
-                            cols_to_cast.append(
-                                pl.coalesce(
-                                    pl.col(col).str.to_date("%Y-%m-%d", strict=False),
-                                    pl.col(col).str.to_date("%d-%m-%Y", strict=False),
-                                    pl.col(col).str.to_date("%Y/%m/%d", strict=False),
-                                    pl.col(col).str.to_date("%d/%m/%Y", strict=False),
-                                )
-                            )
-            if cols_to_cast:
-                raw_df = raw_df.with_columns(cols_to_cast)
-
-            # 2. Gate 1: Source Validation (PRE_BRONZE)
-            source_schema = compile_source_schema(ds_config)
-            source_ctx = ValidationContext(
-                stage=ValidationStage.PRE_BRONZE,
-                dataset_id=dataset_plan.dataset_id,
-                source_id=dataset_plan.source_id,
-                contract_id=f"pre_bronze_{dataset_plan.dataset_id.value}",
-                run_id=run_id,
-            )
-            self.validator.validate(raw_df, source_schema, source_ctx, raise_on_error=True)
-
-            # 3. Pre-Bronze Persistence
-            if pb_contract.sync_strategy == SyncStrategy.FULL_REPLACE:
-                pre_bronze.write_full_replace(
-                    pb_contract, raw_df, artifact_id=artifact_id, source_id=dataset_plan.source_id
-                )
-            else:
-                pre_bronze.write_incremental(
-                    pb_contract, raw_df, artifact_id=artifact_id, source_id=dataset_plan.source_id
-                )
-
-            # Ensure artifact_id is present for canonical Bronze admission
-            if "artifact_id" not in raw_df.columns:
-                raw_df = raw_df.with_columns(pl.lit(artifact_id).alias("artifact_id"))
-
-            # 4. Admission Normalization & Row Identity Derivation
-            id_col = "UID"
-            if isinstance(
-                ds_config.identity, SourceFieldIdentity
-            ) and ds_config.identity.field not in ("Z_PK", "UID", "ZUID"):
-                id_col = ds_config.identity.field
-
-            admission_plan = self.admission_service.compile_admission_plan(
-                dataset_config=ds_config,
-                bronze_contract=bronze_contract,
-                available_source_columns=raw_df.columns,
-                id_column=id_col,
-            )
-            admitted_lf = self.admission_service.execute_admission(admission_plan, raw_df)
-
-            # 5. Gate 2: Canonical Bronze Validation (CANONICAL_BRONZE)
-            canonical_schema = get_canonical_bronze_schema(dataset_plan.dataset_id)
-            canonical_ctx = ValidationContext(
-                stage=ValidationStage.CANONICAL_BRONZE,
-                dataset_id=dataset_plan.dataset_id,
-                source_id=dataset_plan.source_id,
-                contract_id=bronze_contract.physical_table,
-                run_id=run_id,
-            )
-            self.validator.validate(
-                admitted_lf, canonical_schema, canonical_ctx, raise_on_error=True
-            )
-
-            # 6. Canonical Bronze Persistence
-            row_counts = bronze.upsert_table(
-                admitted_lf,
-                bronze_contract.physical_table,
-                [norm_filepath],
-                full_replace=bronze_contract.is_full_replace,
-            )
-            file_rows = row_counts.get(filename, 0)
-            total_rows_added += file_rows
-
-            if bronze_contract.is_full_replace:
-                bronze.db_manager.conn.execute(
-                    "DELETE FROM meta.m_File_Registry WHERE file_category = ?",
-                    [bronze_contract.sync_category],
-                )
-
-            # 7. Control Plane & Meta Layer Synchronization
-            cp.artifacts.mark_synced([norm_filepath])
-            meta_layer.register_file(norm_filepath, bronze_contract.sync_category, file_rows, cp)
-
-            file_progress = ds_base + ((file_idx / max(total_files, 1)) * ds_slot)
-            self.emitter.emit_event(
-                event_code=EventCode.EXTRACTION_BATCH,
-                message=(
-                    f"[{dataset_plan.dataset_id.value}] Ingested file ({file_idx}/{total_files}): "
-                    f"'{filename}' -> Pre-Bronze & Bronze ({file_rows:,} rows)"
-                ),
-                severity=DiagnosticSeverity.INFO,
-                presentation_kind=PresentationKind.PROGRESS,
-                progress=file_progress,
-                stage=EngineStage.EXTRACTING,
-                entity_type="File",
-                entity_id=filename,
-                rows=file_rows,
-            )
-
-        self.emitter.emit_event(
-            event_code=EventCode.BRONZE_UPSERT,
-            message=(
-                f"Bronze: Table '{bronze_contract.physical_table}' upserted "
-                f"{total_rows_added} rows from {len(target_paths)} files via generalized admission."
-            ),
-            severity=DiagnosticSeverity.INFO,
-            presentation_kind=PresentationKind.SUCCESS,
-            progress=ds_base + ds_slot,
-            stage=EngineStage.EXTRACTING,
-            entity_type="Table",
-            entity_id=bronze_contract.physical_table,
-            rows=total_rows_added,
-        )
-        return True

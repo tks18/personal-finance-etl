@@ -64,6 +64,7 @@ from personal_finance_etl.infrastructure.warehouse.bronze import BronzeLayer
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
 from personal_finance_etl.infrastructure.warehouse.contracts import (
     PRE_BRONZE_ARTIFACT_ID,
+    PRE_BRONZE_BINDING_ID,
 )
 from personal_finance_etl.infrastructure.warehouse.meta import MetaLayer
 from personal_finance_etl.infrastructure.warehouse.pre_bronze import PreBronzeLayer
@@ -335,9 +336,12 @@ def test_pre_bronze_and_bronze_dunder_provenance(
 
     db_mgr.open()
     # Check Pre-Bronze MF Orders table
-    pb_orders = db_mgr.conn.query("SELECT * FROM pre_bronze.investment_mf_orders").pl()
+    pb_orders = db_mgr.conn.query(
+        "SELECT * FROM pre_bronze.mf_orders_excel__investment_mf_orders"
+    ).pl()
     assert pb_orders.height > 0
     assert "__source_id__" in pb_orders.columns
+    assert PRE_BRONZE_BINDING_ID in pb_orders.columns
     assert "__dataset_id__" in pb_orders.columns
     assert PRE_BRONZE_ARTIFACT_ID in pb_orders.columns
     # Pre-Bronze must NOT contain legacy file columns or bare artifact_id

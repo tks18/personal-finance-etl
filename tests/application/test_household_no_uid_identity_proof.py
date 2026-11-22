@@ -491,7 +491,7 @@ def test_external_no_uid_csv_ingestion_and_derived_identity(
     # 1. Verify Pre-Bronze contains raw source shape
     df_pb = isolated_duckdb_manager.conn.execute(
         "SELECT TxDate, AccountName, PayeeDescription, TransactionAmount, __artifact_id__ "
-        "FROM pre_bronze.household_inoutcome"
+        "FROM pre_bronze.ext_bank_statement__household_inoutcome"
     ).pl()
     assert df_pb.height == 2
     assert "TxDate" in df_pb.columns

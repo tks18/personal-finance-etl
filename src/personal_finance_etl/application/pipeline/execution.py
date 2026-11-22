@@ -102,8 +102,9 @@ from personal_finance_etl.infrastructure.warehouse.pre_bronze import PreBronzeLa
 from personal_finance_etl.infrastructure.warehouse.registry import (
     BRONZE_CONTRACT_REGISTRY,
     DATA_CONTRACT_REGISTRY,
+    PRE_BRONZE_CONTRACT_REGISTRY,
     get_bronze_contract_by_dataset_id,
-    get_pre_bronze_contract_by_dataset_id,
+    get_pre_bronze_contract_by_binding_id,
     validate_registry,
 )
 from personal_finance_etl.infrastructure.warehouse.silver import SilverLayer
@@ -818,9 +819,14 @@ class PipelineExecutor:
             except ValueError:
                 continue
 
-            pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
-            if pb_contract and pre_bronze.table_exists(pb_contract):
-                self.db_manager.conn.execute(f"DELETE FROM {pb_contract.physical_table}")
+            matching_pb = [
+                c
+                for c in PRE_BRONZE_CONTRACT_REGISTRY
+                if c.dataset_id == ds_id or c.binding_id.endswith(f"__{ds_id.value}")
+            ]
+            for pb_contract in matching_pb:
+                if pre_bronze.table_exists(pb_contract):
+                    self.db_manager.conn.execute(f"DELETE FROM {pb_contract.physical_table}")
 
             b_contract = get_bronze_contract_by_dataset_id(ds_id)
             if b_contract:
@@ -876,6 +882,7 @@ class PipelineExecutor:
         meta_layer = MetaLayer(self.db_manager, self.cfg, self.rules)
         bronze = BronzeLayer(self.db_manager, cp, meta_layer, emitter=self.emitter)
         pre_bronze = PreBronzeLayer(self.db_manager, emitter=self.emitter)
+        pre_bronze.detect_and_upgrade_legacy_tables()
 
         # Reconcile removed or disabled datasets
         self._reconcile_removed_datasets(cp, pre_bronze, bronze, replay_plan=replay_plan)
@@ -908,51 +915,60 @@ class PipelineExecutor:
         if renames:
             bronze.migrate_identity(renames)
             meta_layer.migrate_identity(renames)
-            for old_path, new_path, category in renames:
+            for old_path, new_path, _category in renames:
                 old_id = generate_file_id(old_path)
                 new_id = generate_file_id(new_path)
                 for sp in self.source_plan.source_plans:
-                    for ds_plan in sp.dataset_plans:
-                        b_contract = get_bronze_contract_by_dataset_id(ds_plan.dataset_id)
-                        if b_contract and b_contract.sync_category == category:
-                            pb_contract = get_pre_bronze_contract_by_dataset_id(ds_plan.dataset_id)
-                            if pb_contract and pre_bronze.table_exists(pb_contract):
-                                pre_bronze.migrate_artifact_identity(old_id, new_id, pb_contract)
+                    for bp in sp.binding_plans:
+                        pb_contract = get_pre_bronze_contract_by_binding_id(bp.binding_id)
+                        if pb_contract and pre_bronze.table_exists(pb_contract):
+                            pre_bronze.migrate_artifact_identity(old_id, new_id, pb_contract)
 
-        # Ingest datasets declared in compiled source plan through generalized vertical slice
-        non_market_datasets = [
-            (sp, ds_plan)
+        # Ingest bindings declared in compiled source plan through generalized vertical slice
+        non_market_bindings = [
+            (sp, bp)
             for sp in self.source_plan.source_plans
             if sp.provider_type != ProviderType.MARKET_DATA
-            for ds_plan in sp.dataset_plans
-            if ds_plan.dataset_id != DatasetId.COMMON_COLUMN_MASTER
+            for bp in sp.binding_plans
+            if bp.target_dataset_id != DatasetId.COMMON_COLUMN_MASTER
         ]
-        total_non_market = len(non_market_datasets)
+        total_non_market = len(non_market_bindings)
 
-        for ds_idx, (_sp, ds_plan) in enumerate(non_market_datasets):
-            ds_id = ds_plan.dataset_id
-            pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
-            b_contract = get_bronze_contract_by_dataset_id(ds_id)
-            sync_cat = b_contract.sync_category if b_contract else ds_id.value
-            dataset_actionable = actionable_all
+        for b_idx, (_sp, bp) in enumerate(non_market_bindings):
+            pb_contract = get_pre_bronze_contract_by_binding_id(bp.binding_id)
+            target_ds_id = bp.target_dataset_id
+            b_contract = (
+                get_bronze_contract_by_dataset_id(target_ds_id)
+                if target_ds_id is not None
+                else None
+            )
+            sync_cat = b_contract.sync_category if b_contract else bp.binding_id
+            binding_actionable = actionable_all
             if pb_contract and not pre_bronze.table_exists(pb_contract):
-                if not actionable_all.get(sync_cat) and not actionable_all.get(ds_id.value):
-                    all_cat_files = cp.artifacts.get_all_paths_by_category().get(sync_cat, [])
-                    if all_cat_files:
-                        dataset_actionable = dict(actionable_all)
-                        dataset_actionable[sync_cat] = all_cat_files
-                        dataset_actionable[ds_id.value] = all_cat_files
-            self.ingestion_service.ingest_dataset(
-                dataset_plan=ds_plan,
+                # Missing or upgraded table: rebuild from Control Plane
+                all_cat_files = cp.artifacts.get_all_paths_by_category().get(sync_cat, [])
+                if not all_cat_files and target_ds_id is not None:
+                    all_cat_files = cp.artifacts.get_all_paths_by_category().get(
+                        target_ds_id.value, []
+                    )
+                if all_cat_files:
+                    binding_actionable = dict(actionable_all)
+                    binding_actionable[sync_cat] = all_cat_files
+                    if target_ds_id is not None:
+                        binding_actionable[target_ds_id.value] = all_cat_files
+                    binding_actionable[bp.binding_id] = all_cat_files
+
+            self.ingestion_service.ingest_binding(
+                binding_plan=bp,
                 source_config=self.source_config,
                 cp=cp,
                 pre_bronze=pre_bronze,
                 bronze=bronze,
                 meta_layer=meta_layer,
-                actionable_files=dataset_actionable,
+                actionable_files=binding_actionable,
                 run_id=run_id,
-                current_dataset_idx=ds_idx,
-                total_datasets=total_non_market,
+                current_binding_idx=b_idx,
+                total_bindings=total_non_market,
             )
 
         elapsed_s = time.perf_counter() - t_bronze_start
