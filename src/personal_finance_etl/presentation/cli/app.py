@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import sys
-import threading
 import time
 
 from rich.console import Console
@@ -41,9 +40,7 @@ from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.application.operator import OperatorService
 from personal_finance_etl.contracts.observability import (
     EventCode,
-    EventOutcome,
     ObservabilityEvent,
-    PresentationKind,
 )
 from personal_finance_etl.presentation.observability import RichNarrativeSink
 
@@ -324,9 +321,9 @@ def _handle_info(args: argparse.Namespace) -> None:
     sys.exit(0)
 
 
-def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_path: str) -> None:
+def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_path: str) -> bool:
     """Run pipeline with rich progress bar visualization and terminal event rendering."""
-    completion_event = threading.Event()
+    pipeline_success = False
 
     with Progress(
         SpinnerColumn(),
@@ -346,27 +343,23 @@ def _run_etl_progress(engine: PersonalFinanceEngine, config_path: str, rules_pat
         )
 
         def on_status(status: ObservabilityEvent) -> None:
+            nonlocal pipeline_success
             narrative_sink.emit(status)
-            if status.event_code in (
-                EventCode.SYSTEM_TEARDOWN,
-                EventCode.RUN_COMPLETED,
-                EventCode.RUN_FAILED,
-                EventCode.RUN_ABORTED,
-            ) or (
-                status.outcome in (EventOutcome.COMPLETED, EventOutcome.FAILED)
-                and status.presentation_kind in (PresentationKind.SUCCESS, PresentationKind.FAILURE)
-                and (status.progress == 1.0 or status.outcome == EventOutcome.FAILED)
-            ):
-                completion_event.set()
+            if status.event_code == EventCode.RUN_COMPLETED:
+                pipeline_success = True
 
-        engine.run_pipeline_async(config_path, rules_path, on_status)
+        monitor_thread = engine.run_pipeline_async(config_path, rules_path, on_status)
 
         try:
-            completion_event.wait()
-            progress.update(main_task, completed=100.0)
+            while monitor_thread.is_alive():
+                monitor_thread.join(timeout=0.2)
+            if pipeline_success:
+                progress.update(main_task, completed=100.0)
         except KeyboardInterrupt:
             progress.console.print("\n[bold red]Pipeline forcefully terminated by user.[/bold red]")
             sys.exit(1)
+
+    return pipeline_success
 
 
 def _prompt_next_iteration(config_path: str, rules_path: str) -> tuple[str | None, str | None]:
@@ -421,11 +414,16 @@ def _run_cli_pipeline_iteration(
         sys.exit(0)
 
     console.print("\n[bold green]🚀 EXECUTING ETL PIPELINE...[/bold green]\n")
-    _run_etl_progress(engine, config_path, rules_path)
-    console.print("\n[bold green]=== SYSTEM HALTED. OPERATION COMPLETE. ===[/bold green]\n")
+    success = _run_etl_progress(engine, config_path, rules_path)
 
-    if cron_mode:
-        sys.exit(0)
+    if success:
+        console.print("\n[bold green]=== SYSTEM HALTED. OPERATION COMPLETE. ===[/bold green]\n")
+        if cron_mode:
+            sys.exit(0)
+    else:
+        console.print("\n[bold red]=== PIPELINE RUN FAILED. ===[/bold red]\n")
+        if cron_mode:
+            sys.exit(1)
 
     return _prompt_next_iteration(config_path, rules_path)
 
