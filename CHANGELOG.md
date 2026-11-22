@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.3.2](https://github.com/tks18/personal-finance-etl/compare/10.3.1...10.3.2) (2026-11-22)
+
+
+### Features 🔥
+
+* **config:** add compatibility compiler and topology models ([e3e0b4c](https://github.com/tks18/personal-finance-etl/commit/e3e0b4c22e8e75d440623e1be8fd749733e561ac))
+* **diagnostics:** expose compiled bindings in service and replay ([9d50786](https://github.com/tks18/personal-finance-etl/commit/9d507863c5265498f54244dad48c96a9485891bf))
+
+
+### Tests 🧪
+
+* **config:** add compiler, fingerprint, and replay delta tests ([4720dc5](https://github.com/tks18/personal-finance-etl/commit/4720dc56d12745aeee6a2d34fe352013e842b761))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 047 compatibility compilation ([1a6d3af](https://github.com/tks18/personal-finance-etl/commit/1a6d3af56f80b47b90d5b10681dbbd4308b985b9))
+
 ### [10.3.1](https://github.com/tks18/personal-finance-etl/compare/10.3.0...10.3.1) (2026-11-21)
 
 
