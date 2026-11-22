@@ -1324,8 +1324,13 @@ def test_selected_legacy_route_dormant() -> None:
 
 def test_unmigrated_datasets_remain_legacy() -> None:
     """Scenario 16: All evidence datasets are natively registered without legacy dependencies."""
+    from personal_finance_etl.contracts.datasets import CANDIDATE_BRONZE_DATASETS
+
     evidence_contracts = [
-        c for c in BRONZE_CONTRACT_REGISTRY if c.dataset_id != DatasetId.COMMON_COLUMN_MASTER
+        c
+        for c in BRONZE_CONTRACT_REGISTRY
+        if c.dataset_id != DatasetId.COMMON_COLUMN_MASTER
+        and c.dataset_id not in CANDIDATE_BRONZE_DATASETS
     ]
     assert len(evidence_contracts) == 19
     for c in evidence_contracts:
@@ -1336,13 +1341,25 @@ def test_unmigrated_datasets_remain_legacy() -> None:
 
 def test_migration_template_checklist_contract() -> None:
     """Scenario 17: Enforce migration template obligations A-I on all registered evidence datasets."""
-    from personal_finance_etl.contracts.datasets import PROVIDER_GENERATED_DATASETS
+    from personal_finance_etl.contracts.datasets import (
+        CANDIDATE_BRONZE_DATASETS,
+        PROVIDER_GENERATED_DATASETS,
+    )
 
     evidence_contracts = [
         c for c in BRONZE_CONTRACT_REGISTRY if c.dataset_id != DatasetId.COMMON_COLUMN_MASTER
     ]
     for c in evidence_contracts:
         ds_id = c.dataset_id
+        if ds_id in CANDIDATE_BRONZE_DATASETS:
+            # Candidate canonical datasets are produced via canonical routes on host bindings
+            bronze_contract = get_bronze_contract_by_dataset_id(ds_id)
+            assert bronze_contract is not None, f"Missing BronzeDataContract for candidate {ds_id}"
+            assert has_canonical_bronze_schema(ds_id), (
+                f"Missing canonical Bronze schema for candidate {ds_id}"
+            )
+            continue
+
         if ds_id in PROVIDER_GENERATED_DATASETS:
             # Provider datasets are dynamically synthesized in SourcePlanner without user file bindings
             pb_contract = get_pre_bronze_contract_by_dataset_id(ds_id)
