@@ -147,13 +147,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Route execution supports only the approved row-local normalization, filter, map and constant vocabulary.
-- [ ] Unknown semantic enum values fail explicitly rather than becoming null or being silently dropped.
-- [ ] One binding can emit multiple canonical fragments with source/vendor fields removed at projection.
-- [ ] Route diagnostics explain predicates, mappings, constants and target columns without exposing raw sensitive rows by default.
-- [ ] Semantic route changes participate in deterministic fingerprints and replay classification.
-- [ ] Architecture tests prevent arbitrary Python/SQL/Polars/callback configuration from entering the semantic layer.
-- [ ] Transitional v10.3.0 financial outputs remain unchanged while route execution is proven independently.
+- [x] Route execution supports only the approved row-local normalization, filter, map and constant vocabulary.
+- [x] Unknown semantic enum values fail explicitly rather than becoming null or being silently dropped.
+- [x] One binding can emit multiple canonical fragments with source/vendor fields removed at projection.
+- [x] Route diagnostics explain predicates, mappings, constants and target columns without exposing raw sensitive rows by default.
+- [x] Semantic route changes participate in deterministic fingerprints and replay classification.
+- [x] Architecture tests prevent arbitrary Python/SQL/Polars/callback configuration from entering the semantic layer.
+- [x] Transitional v10.3.0 financial outputs remain unchanged while route execution is proven independently.
 
 ## 12. Commit boundary
 
