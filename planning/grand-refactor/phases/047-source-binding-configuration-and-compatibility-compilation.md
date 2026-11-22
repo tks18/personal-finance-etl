@@ -149,13 +149,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Every accepted v10.3.0 source dataset compiles to one stable binding and transitional route.
-- [ ] Legacy selector, mapping, normalization, identity and change-detection semantics survive compilation exactly.
-- [ ] Binding, route and production fingerprints are deterministic and ordering-insensitive.
-- [ ] Diagnostics can inspect the compiled representation without changing runtime behavior.
-- [ ] Replay classification recognizes future binding/route/production semantic deltas without activating new rebuild behavior.
-- [ ] The legacy-to-new compatibility compiler has an explicit Phase-055 deletion contract and no reverse-sync path.
-- [ ] Full Shan runtime remains on the old acquisition path and is financially identical.
+- [x] Every accepted v10.3.0 source dataset compiles to one stable binding and transitional route.
+- [x] Legacy selector, mapping, normalization, identity and change-detection semantics survive compilation exactly.
+- [x] Binding, route and production fingerprints are deterministic and ordering-insensitive.
+- [x] Diagnostics can inspect the compiled representation without changing runtime behavior.
+- [x] Replay classification recognizes future binding/route/production semantic deltas without activating new rebuild behavior.
+- [x] The legacy-to-new compatibility compiler has an explicit Phase-055 deletion contract and no reverse-sync path.
+- [x] Full Shan runtime remains on the old acquisition path and is financially identical.
 
 ## 12. Commit boundary
 
@@ -168,20 +168,40 @@ Phase 048 receives a deterministic compiled binding model for the complete curre
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 047 - Source-Binding Configuration and Compatibility Compilation
+Target release: v10.3.2
 Files changed:
-Schema changed:
-Runtime behavior changed:
+  src/personal_finance_etl/contracts/recovery.py
+  src/personal_finance_etl/contracts/diagnostics.py
+  src/personal_finance_etl/config/sources/compiler.py
+  src/personal_finance_etl/config/sources/fingerprint.py
+  src/personal_finance_etl/config/sources/loader.py
+  src/personal_finance_etl/config/sources/__init__.py
+  src/personal_finance_etl/application/pipeline/replay.py
+  src/personal_finance_etl/application/diagnostics/service.py
+  src/personal_finance_etl/presentation/cli/diagnostics.py
+  tests/config/test_compatibility_compiler.py
+  tests/config/test_compiled_topology_fingerprint.py
+  tests/application/test_replay_binding_classification.py
+  tests/config/test_migration_matrix_frozen.py
+  tests/architecture/test_boundaries.py
+Schema changed: NO
+Runtime behavior changed: NO (transitional compatibility compilation only)
 Financial formulas changed: NO
 Focused tests:
+  tests/config/test_compatibility_compiler.py
+  tests/config/test_compiled_topology_fingerprint.py
+  tests/application/test_replay_binding_classification.py
+  tests/config/test_migration_matrix_frozen.py
+  tests/architecture/test_boundaries.py
 Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commits:
+  tests/architecture/test_boundaries.py (test_compatibility_compiler_has_zero_storage_or_dataframe_imports)
+Real-data run: N/A (compile-time configuration bridge only)
+Performance check: audit:fast completed in 1.12s
+Compatibility path still present: YES (CompatibilitySourceBindingCompiler active)
+Old path deleted: NO (demolition scheduled for Phase 055)
+Exit assertions green: YES
+Commits: 4 grouped commits planned via .commit_overrides.json
 ```
 
 A phase is incomplete if any required exit assertion is false.
