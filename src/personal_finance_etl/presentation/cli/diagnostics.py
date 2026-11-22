@@ -418,6 +418,68 @@ def handle_preview_plan(args: argparse.Namespace, engine: PersonalFinanceEngine)
     console.print(table)
     console.print()
 
+    # Render canonical production satisfiability graph if available
+    if plan.production_plan_fingerprint:
+        status_text = (
+            "[bold green]SATISFIABLE[/bold green]"
+            if plan.is_satisfiable
+            else "[bold red]UNSATISFIABLE[/bold red]"
+        )
+        console.print(
+            Panel(
+                f"[bold]Production Fingerprint:[/bold] [dim yellow]{plan.production_plan_fingerprint}[/dim yellow]\n"
+                f"[bold]Satisfiability Status:[/bold] {status_text}",
+                title="[bold green]Canonical Production Satisfiability[/bold green]",
+                border_style="cyan",
+            )
+        )
+
+    if plan.producer_resolutions:
+        prod_table = Table(
+            title="[bold cyan]Resolved Canonical Evidence Production Graph[/bold cyan]",
+            expand=True,
+        )
+        prod_table.add_column("Canonical Dataset", style="bold green", width=26)
+        prod_table.add_column("Kind", style="cyan", width=10)
+        prod_table.add_column("Mode", style="yellow", width=8)
+        prod_table.add_column("Routes / Provider / Recipe", style="white")
+        prod_table.add_column("Dependencies", style="dim", width=22)
+
+        for res in plan.producer_resolutions:
+            routes_str = (
+                ", ".join(res.source_routes)
+                if res.source_routes
+                else (res.recipe_name or res.provider_type or "-")
+            )
+            deps_str = ", ".join(d.value for d in res.dependencies) or "-"
+            prod_table.add_row(
+                res.dataset_id.value,
+                res.producer_kind.upper(),
+                (res.assembly_mode or "-").upper(),
+                routes_str,
+                deps_str,
+            )
+
+        console.print(prod_table)
+        console.print()
+
+    if plan.unsatisfied_evidence:
+        unsat_table = Table(
+            title="[bold red]Unsatisfied Required Canonical Evidence[/bold red]",
+            expand=True,
+            border_style="red",
+        )
+        unsat_table.add_column("Dataset", style="bold red", width=26)
+        unsat_table.add_column("Mandating Capabilities", style="yellow", width=30)
+        unsat_table.add_column("Diagnostic Detail", style="white")
+
+        for unsat in plan.unsatisfied_evidence:
+            caps_str = ", ".join(unsat.required_by_capabilities) or "Unknown"
+            unsat_table.add_row(unsat.dataset_id.value, caps_str, unsat.reason)
+
+        console.print(unsat_table)
+        console.print()
+
     return 0
 
 

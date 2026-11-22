@@ -18,6 +18,9 @@ from __future__ import annotations
 import json
 from typing import cast
 
+from personal_finance_etl.application.ingestion.canonical_recipes import (
+    get_global_recipe_registry,
+)
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.config.sources.fingerprint import canonicalize_source_configuration
 from personal_finance_etl.config.sources.loader import SourceConfiguration
@@ -266,6 +269,11 @@ class SourceConfigChangeClassifier:
                 if td.dataset_id not in existing_dataset_ids:
                     dataset_changes.append(td)
 
+        # Expand affected datasets closure to include derived canonical dependents
+        SourceConfigChangeClassifier._expand_derived_canonical_closure(
+            affected_datasets, dataset_changes
+        )
+
         # Determine overall action
         overall_action = ReplayAction.NO_REPLAY
         if requires_identity_rebuild:
@@ -421,6 +429,47 @@ class SourceConfigChangeClassifier:
                 )
 
         return deltas
+
+    @staticmethod
+    def _expand_derived_canonical_closure(
+        affected_datasets: list[str],
+        dataset_changes: list[DatasetChangeDetail],
+    ) -> None:
+        """Expand affected datasets closure to include downstream derived canonical dependents.
+
+        Parameters
+        ----------
+        affected_datasets : list[str]
+            Accumulator of dataset identities requiring re-ingestion/replay.
+        dataset_changes : list[DatasetChangeDetail]
+            Accumulator of granular semantic change descriptions.
+        """
+        if not affected_datasets:
+            return
+
+        affected_set = set(affected_datasets)
+        recipe_registry = get_global_recipe_registry()
+        expanded = True
+        while expanded:
+            expanded = False
+            for recipe in recipe_registry.list_recipes():
+                target_str = recipe.target_dataset_id.value
+                if target_str not in affected_set:
+                    dep_strings = {dep.value for dep in recipe.dependencies}
+                    if any(dep in affected_set for dep in dep_strings):
+                        affected_set.add(target_str)
+                        affected_datasets.append(target_str)
+                        dataset_changes.append(
+                            DatasetChangeDetail(
+                                dataset_id=target_str,
+                                change_class=ConfigChangeClass.MAPPING_SEMANTICS,
+                                action=ReplayAction.REPLAY_AFFECTED_DATASETS,
+                                details={
+                                    "reason": "Derived canonical dataset depends on affected dataset in replay closure"
+                                },
+                            )
+                        )
+                        expanded = True
 
 
 class ReplayCoordinator:
