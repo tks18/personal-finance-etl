@@ -71,11 +71,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 9. Tests and verification
 
-- [ ] Only `pfetl` is installed as the primary application entry point.
-- [ ] `pfetl run/status/doctor/info/snapshot/restore` execute through application services.
-- [ ] Doctor can identify missing config/source/store/provider conditions with actionable output.
-- [ ] Info/status operate read-only and do not mutate financial state.
-- [ ] Existing headless/scheduled execution remains possible.
+- [x] Only `pfetl` is installed as the primary application entry point.
+- [x] `pfetl run/status/doctor/info/snapshot/restore` execute through application services.
+- [x] Doctor can identify missing config/source/store/provider conditions with actionable output.
+- [x] Info/status operate read-only and do not mutate financial state.
+- [x] Existing headless/scheduled execution remains possible.
 
 ## 10. Explicit non-goals
 
@@ -84,11 +84,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 11. Completion checklist
 
-- [ ] Exit assertion: Only `pfetl` is installed as the primary application entry point.
-- [ ] Exit assertion: `pfetl run/status/doctor/info/snapshot/restore` execute through application services.
-- [ ] Exit assertion: Doctor can identify missing config/source/store/provider conditions with actionable output.
-- [ ] Exit assertion: Info/status operate read-only and do not mutate financial state.
-- [ ] Exit assertion: Existing headless/scheduled execution remains possible.
+- [x] Exit assertion: Only `pfetl` is installed as the primary application entry point.
+- [x] Exit assertion: `pfetl run/status/doctor/info/snapshot/restore` execute through application services.
+- [x] Exit assertion: Doctor can identify missing config/source/store/provider conditions with actionable output.
+- [x] Exit assertion: Info/status operate read-only and do not mutate financial state.
+- [x] Exit assertion: Existing headless/scheduled execution remains possible.
 
 ## 12. Commit boundary
 
@@ -103,16 +103,16 @@ The next phase may assume only the verified state above. It begins **PySide6 She
 ```text
 Phase: 013
 Target release: v11.4.0
-Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
-Semantic commit groups:
-Exit assertions green: yes/no
+Files changed: pyproject.toml, uv.lock, src/personal_finance_etl/__init__.py, src/personal_finance_etl/application/operator.py, src/personal_finance_etl/application/facade.py, src/personal_finance_etl/presentation/launcher.py, src/personal_finance_etl/presentation/cli/app.py, scripts/run_pipeline.bat, tests/test_phase13_single_command_and_operator_services.py, tests/test_phase10_presentation.py, tests/test_phase12_constitutional_certification.py, docs/getting-started/cli-and-desktop.md, docs/getting-started/installation.md, docs/getting-started/quick-start.md, docs/getting-started/README.md, README.md, g:\My Drive\Docs\Financial Docs\Financial Planner\Analysis\ETL App\run_pipeline_prod.ps1, g:\My Drive\Docs\Financial Docs\Financial Planner\Analysis\ETL App\run_pipeline_test.ps1
+Contracts/schema changed: None (financial schema and contracts strictly preserved)
+Financial formulas changed: None (financial formulas untouched)
+Protected identity comparison: Preserved exact canonical domain grain and identity contracts
+Focused tests: tests/test_phase13_single_command_and_operator_services.py (7 passed), tests/test_phase10_presentation.py (7 passed), tests/test_phase12_constitutional_certification.py (5 passed); 142 total cutover phase tests passed
+Architecture tests: uv run poe audit-fast (Ruff check, Ruff format, Mypy 100% clean); zero inline imports verified
+Real-data verification: Verified pfetl status, pfetl doctor, and pfetl info against local repository state and stores
+Power BI verification: N/A (presentation and CLI entry point refactor)
+Observability/recovery verification: Read-only operator services (status, doctor, info) acquire no file locks or DuckDB write locks; FileLock.is_locked inspection only; actionable diagnostics per check without raw stack traces
+Compatibility/transitional state remaining: Naked pfetl routes to DesktopApp (Tkinter GUI) until PySide6 cutover in Phase 014
+Semantic commit groups: feat(cli), feat(diagnostics), test(cli), docs(cli), docs(v11)
+Exit assertions green: yes
 ```
