@@ -307,7 +307,7 @@ CREATE TABLE IF NOT EXISTS silver.dim_benchmark_master (
     yF_Ticker TEXT
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_Investment_Master (
+CREATE TABLE IF NOT EXISTS silver.dim_instrument_master (
     -- Identifiers
     ISIN TEXT PRIMARY KEY,
     CATEGORY_ID TEXT,
@@ -364,7 +364,7 @@ CREATE TABLE IF NOT EXISTS silver.ref_financial_year_parameters (
     FOREIGN KEY(FY_Start_Date) REFERENCES silver.dim_calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
+CREATE TABLE IF NOT EXISTS silver.fact_investment_market_data (
     -- Identifiers
     Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
@@ -394,11 +394,11 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
     FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date),
-    FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
+    FOREIGN KEY(ISIN) REFERENCES silver.dim_instrument_master(ISIN),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
+CREATE TABLE IF NOT EXISTS silver.fact_investment_purchases (
     -- Identifiers
     Purchase_ID TEXT PRIMARY KEY,
     Date DATE NOT NULL,
@@ -414,14 +414,12 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
     Price_Local DOUBLE,
     Value_Local DOUBLE,
     FX_Rate DOUBLE,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date),
-    FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
+    FOREIGN KEY(ISIN) REFERENCES silver.dim_instrument_master(ISIN),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Investment_Sale_Data (
+CREATE TABLE IF NOT EXISTS silver.fact_investment_sales (
     -- Identifiers
     Sale_ID TEXT PRIMARY KEY,
     Date DATE NOT NULL,
@@ -444,14 +442,12 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Sale_Data (
     -- Absolute Returns
     Unit_PnL DOUBLE,
     Total_PnL DOUBLE,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
     FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date),
-    FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
+    FOREIGN KEY(ISIN) REFERENCES silver.dim_instrument_master(ISIN),
     FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Investment_Benchmark_Data (
+CREATE TABLE IF NOT EXISTS silver.fact_investment_benchmark_data (
     -- Identifiers
     Date DATE,
     ID TEXT,
@@ -472,7 +468,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Benchmark_Data (
     FOREIGN KEY(ID) REFERENCES silver.dim_benchmark_master(ID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
+CREATE TABLE IF NOT EXISTS silver.fact_investment_lot_analytics (
     -- Identifiers
     Lot_ID TEXT NOT NULL,
     Closing_Date DATE NOT NULL,
@@ -573,7 +569,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
     PRIMARY KEY (Lot_ID, Closing_Date)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Investment_Realized_Events (
+CREATE TABLE IF NOT EXISTS silver.fact_investment_realized_events (
     Realized_Event_ID TEXT PRIMARY KEY,
     Sale_ID TEXT NOT NULL,
     Lot_ID TEXT NOT NULL,
@@ -603,7 +599,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Realized_Events (
     UNIQUE(Sale_ID, Lot_ID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Investment_Reconciliation_Events (
+CREATE TABLE IF NOT EXISTS silver.fact_investment_reconciliation_events (
     Reconciliation_Group_ID TEXT NOT NULL,
     Reconciliation_Event_ID TEXT PRIMARY KEY,
     Run_ID TEXT,
@@ -623,7 +619,7 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Reconciliation_Events (
     Adjusted_Unit_Cost DOUBLE
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Tax_Events (
+CREATE TABLE IF NOT EXISTS silver.fact_tax_events (
     Tax_Event_ID TEXT PRIMARY KEY,
     FY TEXT NOT NULL,
     Event_Date DATE NOT NULL,
