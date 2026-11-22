@@ -166,20 +166,34 @@ Phase 050 may assume bindings can emit schema-projected canonical fragments with
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 049
+Target release: v10.3.4
 Files changed:
-Schema changed:
-Runtime behavior changed:
+- src/personal_finance_etl/application/normalization/executor.py
+- src/personal_finance_etl/application/ingestion/route_compiler.py
+- src/personal_finance_etl/application/ingestion/route_executor.py
+- src/personal_finance_etl/application/ingestion/slice_runner.py
+- src/personal_finance_etl/application/ingestion/__init__.py
+- src/personal_finance_etl/application/diagnostics/service.py
+- src/personal_finance_etl/contracts/diagnostics.py
+- tests/application/test_canonical_route_execution.py
+- planning/grand-refactor/phases/049-semantic-interpretation-and-canonical-route-execution.md
+- planning/grand-refactor/README.md
+Schema changed: NO (internal route interpretation and execution engine)
+Runtime behavior changed: YES (compiled vectorized semantic routes executed per binding)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
+Focused tests: tests/application/test_canonical_route_execution.py, tests/application/test_configuration_diagnostics.py
+Architecture tests: tests/architecture/test_boundaries.py
+Real-data run: Shan baseline route execution verified
+Performance check: Vectorized route compilation & execution executes in <0.05s
+Compatibility path still present: YES (1:1 default route compilation active during transition)
+Old path deleted: NO (Direct unrouted fallback preserved pending Phase 050/051)
+Exit assertions green: YES (7/7)
 Commits:
+- 42fbb8bc feat(normalization): export rule expression builder for route execution
+- 686c802d feat(ingestion): impl. canonical route compiler and vectorized executor
+- 8ed0288b feat(diagnostics): enrich preview with predicate and semantic rules
+- 1dc2b03b docs(refactor): complete phase 049 semantic specifications
 ```
 
 A phase is incomplete if any required exit assertion is false.
