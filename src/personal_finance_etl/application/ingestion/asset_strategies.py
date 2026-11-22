@@ -258,7 +258,7 @@ class MutualFundPipeline:
             Normalized MF market data, purchases, sales, and master references.
         """
         diagnostics.debug("Parsing unstructured Mutual Fund Excel files...")
-        mapping = extracted.stg_mf_isin_mapping
+        mapping = extracted.raw_mutual_fund_instrument_mapping
         market_data = get_stg_mf_market_data(
             extracted.mf_market_data_raw, mapping, rules.DEFAULT_CURRENCY_ID
         )

@@ -24,20 +24,22 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
 
 __all__ = [
     "extract_benchmark_master_raw",
-    "extract_currency_mapping_raw",
-    "extract_macro_parameters_raw",
+    "extract_currency_reference_raw",
+    "extract_financial_year_parameters_raw",
+    "extract_instrument_master_raw",
+    "extract_mutual_fund_instrument_mapping_raw",
     "extract_opening_balances_raw",
-    "extract_stg_benchmark_mapping",
-    "extract_stg_mf_isin_mapping",
 ]
 
 diagnostics = get_observability_diagnostics(__name__)
 
 
-def extract_stg_mf_isin_mapping(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
-    """Parse Mutual Fund ISIN mapping CSV bytes into a LazyFrame."""
+def extract_mutual_fund_instrument_mapping_raw(
+    filename: str, folder_path: str, raw_bytes: bytes
+) -> pl.LazyFrame:
+    """Parse Mutual Fund instrument mapping CSV bytes into a LazyFrame."""
     schema_overrides = {"INSTRUMENT_NAME": pl.String, "ISIN": pl.String}
-    diagnostics.debug(f"Building lazy frame for MF ISIN mapping: {filename}")
+    diagnostics.debug(f"Building lazy frame for MF instrument mapping: {filename}")
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
         .lazy()
@@ -48,8 +50,10 @@ def extract_stg_mf_isin_mapping(filename: str, folder_path: str, raw_bytes: byte
     )
 
 
-def extract_currency_mapping_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
-    """Parse Currency mapping CSV bytes into a LazyFrame."""
+def extract_currency_reference_raw(
+    filename: str, folder_path: str, raw_bytes: bytes
+) -> pl.LazyFrame:
+    """Parse Currency reference CSV bytes into a LazyFrame."""
     schema_overrides = {
         "UID": pl.String,
         "Currency_Code": pl.String,
@@ -58,7 +62,7 @@ def extract_currency_mapping_raw(filename: str, folder_path: str, raw_bytes: byt
         "Currency_Name": pl.String,
         "Is_Active": pl.Boolean,
     }
-    diagnostics.debug(f"Building lazy frame for Currency mapping: {filename}")
+    diagnostics.debug(f"Building lazy frame for Currency reference: {filename}")
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
         .lazy()
@@ -69,10 +73,10 @@ def extract_currency_mapping_raw(filename: str, folder_path: str, raw_bytes: byt
     )
 
 
-def extract_stg_benchmark_mapping(
+def extract_instrument_master_raw(
     filename: str, folder_path: str, raw_bytes: bytes
 ) -> pl.LazyFrame:
-    """Parse Benchmark mapping CSV bytes into a LazyFrame."""
+    """Parse Instrument Master CSV bytes into a LazyFrame."""
     schema_overrides = {
         "ISIN": pl.String,
         "Sector": pl.String,
@@ -85,7 +89,7 @@ def extract_stg_benchmark_mapping(
         "Geo": pl.String,
         "Geo_Subtype": pl.String,
     }
-    diagnostics.debug(f"Building lazy frame for Benchmark mapping: {filename}")
+    diagnostics.debug(f"Building lazy frame for Instrument Master: {filename}")
     return (
         pl.read_csv(io.BytesIO(raw_bytes), schema_overrides=schema_overrides)
         .lazy()
@@ -115,8 +119,10 @@ def extract_benchmark_master_raw(filename: str, folder_path: str, raw_bytes: byt
     )
 
 
-def extract_macro_parameters_raw(filename: str, folder_path: str, raw_bytes: bytes) -> pl.LazyFrame:
-    """Parse Macro Parameters CSV bytes into a LazyFrame."""
+def extract_financial_year_parameters_raw(
+    filename: str, folder_path: str, raw_bytes: bytes
+) -> pl.LazyFrame:
+    """Parse Financial Year Parameters CSV bytes into a LazyFrame."""
     schema_overrides = {
         "FY": pl.String,
         "FY_Start_Date": pl.Date,

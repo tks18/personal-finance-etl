@@ -46,11 +46,11 @@ from personal_finance_etl.infrastructure.observability.diagnostics import (
 )
 from personal_finance_etl.infrastructure.providers.files.csv import (
     extract_benchmark_master_raw,
-    extract_currency_mapping_raw,
-    extract_macro_parameters_raw,
+    extract_currency_reference_raw,
+    extract_financial_year_parameters_raw,
+    extract_instrument_master_raw,
+    extract_mutual_fund_instrument_mapping_raw,
     extract_opening_balances_raw,
-    extract_stg_benchmark_mapping,
-    extract_stg_mf_isin_mapping,
 )
 from personal_finance_etl.infrastructure.providers.files.excel import (
     extract_mf_market_data_raw,
@@ -177,17 +177,17 @@ class DataExtractor:
             "opbal": get_column_mapping(df_column_master, "ZOPBAL"),
         }
         config_frames = {
-            "stg_mf_isin_mapping": self._read_config_csv_lazy(
+            "raw_mutual_fund_instrument_mapping": self._read_config_csv_lazy(
                 pending_files,
                 self.cfg.sources.mutual_fund_instrument_mapping,
-                extract_stg_mf_isin_mapping,
-                "mf_isin",
+                extract_mutual_fund_instrument_mapping_raw,
+                "mutual_fund_instrument_mapping",
             ),
-            "stg_benchmark_mapping": self._read_config_csv_lazy(
+            "raw_instrument_master": self._read_config_csv_lazy(
                 pending_files,
                 self.cfg.sources.instrument_master,
-                extract_stg_benchmark_mapping,
-                "benchmark_mapping",
+                extract_instrument_master_raw,
+                "instrument_master",
             ),
             "raw_opening_balances": self._read_config_csv_lazy(
                 pending_files,
@@ -201,17 +201,17 @@ class DataExtractor:
                 extract_benchmark_master_raw,
                 "benchmark_master",
             ),
-            "raw_macro_parameters": self._read_config_csv_lazy(
+            "raw_financial_year_parameters": self._read_config_csv_lazy(
                 pending_files,
                 self.cfg.sources.financial_year_parameters,
-                extract_macro_parameters_raw,
-                "macro_parameters",
+                extract_financial_year_parameters_raw,
+                "financial_year_parameters",
             ),
-            "currency_mapping_raw": self._read_config_csv_lazy(
+            "raw_currency_reference": self._read_config_csv_lazy(
                 pending_files,
                 self.cfg.sources.currency_reference,
-                extract_currency_mapping_raw,
-                "currency_mapping",
+                extract_currency_reference_raw,
+                "currency_reference",
             ),
         }
         self.emitter.emit_event(
@@ -245,13 +245,13 @@ class DataExtractor:
         csv_count = sum(
             len(pending_files.get(k, []))
             for k in [
-                "mf_isin",
-                "benchmark_mapping",
+                "mutual_fund_instrument_mapping",
+                "instrument_master",
                 "opening_balances",
                 "benchmark_master",
-                "macro_parameters",
+                "financial_year_parameters",
                 "column_master",
-                "currency_mapping",
+                "currency_reference",
             ]
         )
         sqlite_count = len(pending_files.get("sqlite_source", []))
@@ -315,17 +315,17 @@ class DataExtractor:
             result.assets,
             result.currency,
             result.inoutcome,
-            result.stg_mf_isin_mapping,
-            result.stg_benchmark_mapping,
+            result.raw_mutual_fund_instrument_mapping,
+            result.raw_instrument_master,
             result.mf_market_data_raw,
             result.mf_transactions_raw,
             result.stock_market_data_raw,
             result.stock_transactions_raw,
             result.raw_opening_balances,
             result.raw_benchmark_master,
-            result.raw_macro_parameters,
+            result.raw_financial_year_parameters,
             result.us_stock_transactions_raw,
-            result.currency_mapping_raw,
+            result.raw_currency_reference,
         ]
 
         try:
@@ -401,12 +401,12 @@ class DataExtractor:
             inoutcome=inout,
             mappings=mappings,
             column_master=df_column_master,
-            stg_mf_isin_mapping=config_frames["stg_mf_isin_mapping"],
-            stg_benchmark_mapping=config_frames["stg_benchmark_mapping"],
+            raw_mutual_fund_instrument_mapping=config_frames["raw_mutual_fund_instrument_mapping"],
+            raw_instrument_master=config_frames["raw_instrument_master"],
             raw_opening_balances=config_frames["raw_opening_balances"],
             raw_benchmark_master=config_frames["raw_benchmark_master"],
-            raw_macro_parameters=config_frames["raw_macro_parameters"],
-            currency_mapping_raw=config_frames["currency_mapping_raw"],
+            raw_financial_year_parameters=config_frames["raw_financial_year_parameters"],
+            raw_currency_reference=config_frames["raw_currency_reference"],
             mf_market_data_raw=excel_frames["mf_market_data_raw"],
             mf_transactions_raw=excel_frames["mf_transactions_raw"],
             stock_market_data_raw=excel_frames["stock_market_data_raw"],

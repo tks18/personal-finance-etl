@@ -37,7 +37,9 @@ def _filter_active_mf_holdings(df: pl.LazyFrame) -> pl.LazyFrame:
 
 
 def get_stg_mf_market_data(
-    raw_data: pl.LazyFrame, stg_mf_isin_mapping_lazy: pl.LazyFrame, default_currency_id: str
+    raw_data: pl.LazyFrame,
+    raw_mutual_fund_instrument_mapping_lazy: pl.LazyFrame,
+    default_currency_id: str,
 ) -> pl.LazyFrame:
     """Apply final PQ & DAX transformations (including LOOKUPVALUE).
 
@@ -60,7 +62,10 @@ def get_stg_mf_market_data(
         # DAX: LOOKUPVALUE for ISIN
         # This replicates DAX by joining the MF_ISIN_MAPPING table
         .join(
-            stg_mf_isin_mapping_lazy, left_on="Scheme Name", right_on="INSTRUMENT_NAME", how="left"
+            raw_mutual_fund_instrument_mapping_lazy,
+            left_on="Scheme Name",
+            right_on="INSTRUMENT_NAME",
+            how="left",
         )
         # Final Select (Ensure output matches your expected schema)
         .select(
@@ -181,7 +186,7 @@ def get_base_mf_transactions(raw_data: pl.LazyFrame) -> pl.LazyFrame:
 
 def transform_stg_mf_trades(
     base_mf_orders_lazy: pl.LazyFrame,
-    stg_mf_isin_mapping_lazy: pl.LazyFrame,
+    raw_mutual_fund_instrument_mapping_lazy: pl.LazyFrame,
     scheme_mapping: dict[str, str],
     trade_type: str,
 ) -> pl.LazyFrame:
@@ -208,7 +213,7 @@ def transform_stg_mf_trades(
 
     # 3. DAX LOOKUPVALUE logic for ISIN
     df_transformed = df_mapped.join(
-        stg_mf_isin_mapping_lazy,
+        raw_mutual_fund_instrument_mapping_lazy,
         left_on="Final Scheme Name",
         right_on="INSTRUMENT_NAME",
         how="left",

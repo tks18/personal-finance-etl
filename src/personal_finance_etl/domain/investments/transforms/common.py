@@ -494,7 +494,7 @@ def get_f_tf_investment_sale_data(
 
 def get_d_investment_master(
     master_refs: list[pl.LazyFrame],
-    stg_benchmark_mapping_lazy: pl.LazyFrame,
+    raw_instrument_master_lazy: pl.LazyFrame,
     default_currency_id: str,
 ) -> pl.LazyFrame:
     """Translate d_InvestmentMaster dimensional data.
@@ -514,7 +514,7 @@ def get_d_investment_master(
             pl.col("CURRENCY_ID").fill_null(default_currency_id)
         )
 
-    df_final = df_master_union.join(stg_benchmark_mapping_lazy, on="ISIN", how="left").select(
+    df_final = df_master_union.join(raw_instrument_master_lazy, on="ISIN", how="left").select(
         [
             "ISIN",
             "INSTRUMENT_NAME",
