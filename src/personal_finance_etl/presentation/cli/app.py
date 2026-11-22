@@ -55,7 +55,7 @@ EngineStatus = ObservabilityEvent
 try:
     __version__ = importlib.metadata.version("personal-finance-etl")
 except importlib.metadata.PackageNotFoundError:
-    __version__ = "11.4.0"
+    __version__ = "11.2.0"
 
 if sys.platform == "win32":
     try:
@@ -71,12 +71,12 @@ console = Console()
 
 LOGO = f"""
 [bold cyan]
-███████╗██╗  ██╗ █████╗ ███╗   ██╗    ███████╗████████╗██╗     
-██╔════╝██║  ██║██╔══██╗████╗  ██║    ██╔════╝╚══██╔══╝██║     
-███████╗███████║███████║██╔██╗ ██║    █████╗     ██║   ██║     
-╚════██║██╔══██║██╔══██║██║╚██╗██║    ██╔══╝     ██║   ██║     
-███████║██║  ██║██║  ██║██║ ╚████║    ███████╗   ██║   ███████╗
-╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝    ╚══════╝   ╚═╝   ╚══════╝
+██████╗ ███████╗███████╗████████╗██╗     
+██╔══██╗██╔════╝██╔════╝╚══██╔══╝██║     
+██████╔╝█████╗  █████╗     ██║   ██║     
+██╔═══╝ ██╔══╝  ██╔══╝     ██║   ██║     
+██║     ██║     ███████╗   ██║   ███████╗
+╚═╝     ╚═╝     ╚══════╝   ╚═╝   ╚══════╝
 [/bold cyan]
 [bold bright_black]PFETL · LOCAL-FIRST FINANCIAL SYSTEMS PLATFORM v{__version__}[/bold bright_black]
 """

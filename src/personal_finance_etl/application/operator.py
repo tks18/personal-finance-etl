@@ -55,7 +55,7 @@ class DoctorCheckResult:
 class DoctorReport:
     """Complete collection of diagnostic checks and aggregate health status."""
 
-    checks: list[DoctorCheckResult] = field(default_factory=list)
+    checks: list[DoctorCheckResult] = field(default_factory=list[DoctorCheckResult])
     overall_status: Literal["PASS", "WARN", "FAIL"] = "PASS"
     passed_count: int = 0
     warn_count: int = 0
@@ -274,7 +274,7 @@ class OperatorService:
         try:
             ver = importlib.metadata.version("personal-finance-etl")
         except Exception:
-            ver = "11.4.0"
+            ver = "11.2.0"
 
         base_path = settings.database.target_db_base_path if settings else None
         duckdb_name = settings.database.target_db_name if settings else "Personal_Finance_DB.duckdb"
