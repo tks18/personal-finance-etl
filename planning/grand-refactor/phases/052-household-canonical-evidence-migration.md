@@ -136,13 +136,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] All six new household Bronze DatasetContracts are explicit, source-neutral and supported by consumer evidence.
-- [ ] Shan category/asset/currency/transaction/opening-balance bindings produce those contracts through the generic route/production engine.
-- [ ] Source deletion/discriminator semantics are resolved before the new Bronze boundary.
-- [ ] Canonical household identity, provenance and cross-dataset integrity checks are green.
-- [ ] Old and new household Bronze paths can be compared deterministically while Silver still consumes the old path.
-- [ ] Satisfiability recognizes the new household evidence as valid future `HOUSEHOLD_CORE` producers without switching the capability yet.
-- [ ] Full Shan run persists the new household Bronze in parallel with zero Silver/Gold financial change.
+- [x] All six new household Bronze DatasetContracts are explicit, source-neutral and supported by consumer evidence.
+- [x] Shan category/asset/currency/transaction/opening-balance bindings produce those contracts through the generic route/production engine.
+- [x] Source deletion/discriminator semantics are resolved before the new Bronze boundary.
+- [x] Canonical household identity, provenance and cross-dataset integrity checks are green.
+- [x] Old and new household Bronze paths can be compared deterministically while Silver still consumes the old path.
+- [x] Satisfiability recognizes the new household evidence as valid future `HOUSEHOLD_CORE` producers without switching the capability yet.
+- [x] Full Shan run persists the new household Bronze in parallel with zero Silver/Gold financial change.
 
 ## 12. Commit boundary
 
@@ -155,20 +155,49 @@ Phase 053 receives six proven canonical household Bronze datasets plus the uncha
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 052
+Target release: v10.4.1
 Files changed:
-Schema changed:
-Runtime behavior changed:
+- src/personal_finance_etl/contracts/datasets.py
+- src/personal_finance_etl/contracts/canonical_fields.py
+- src/personal_finance_etl/contracts/capabilities.py
+- src/personal_finance_etl/contracts/__init__.py
+- src/personal_finance_etl/infrastructure/warehouse/contracts.py
+- src/personal_finance_etl/infrastructure/warehouse/registry.py
+- src/personal_finance_etl/infrastructure/warehouse/schema/bronze.py
+- src/personal_finance_etl/infrastructure/validation/canonical_schemas.py
+- src/personal_finance_etl/infrastructure/validation/__init__.py
+- src/personal_finance_etl/config/sources/household_routes.py
+- src/personal_finance_etl/config/sources/compiler.py
+- src/personal_finance_etl/config/sources/loader.py
+- src/personal_finance_etl/application/ingestion/slice_runner.py
+- src/personal_finance_etl/application/ingestion/canonical_production.py
+- src/personal_finance_etl/application/ingestion/canonical_integrity.py
+- src/personal_finance_etl/application/ingestion/route_executor.py
+- src/personal_finance_etl/application/diagnostics/household_parity.py
+- tests/contracts/test_household_candidate_contracts.py
+- tests/contracts/test_source_bindings.py
+- tests/contracts/test_canonical_fields.py
+- tests/architecture/test_table_naming_guards.py
+- tests/config/test_compatibility_compiler.py
+- tests/config/test_migration_matrix_frozen.py
+- tests/application/test_household_canonical_routes.py
+- tests/application/test_household_parity.py
+- tests/application/test_household_integrity.py
+- tests/application/test_generalized_vertical_slice.py
+- planning/grand-refactor/phases/052-household-canonical-evidence-migration.md
+- planning/grand-refactor/README.md
+Schema changed: YES (Additive candidate DuckDB Bronze tables for HOUSEHOLD_CATEGORIES, HOUSEHOLD_ASSET_CATEGORIES, HOUSEHOLD_ACCOUNTS, COMMON_CURRENCIES, HOUSEHOLD_TRANSACTIONS, HOUSEHOLD_ACCOUNT_BALANCES)
+Runtime behavior changed: YES (Parallel production of canonical household Bronze evidence via generic route/production engine alongside legacy Bronze tables)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commits:
+Focused tests: tests/contracts/test_household_candidate_contracts.py, tests/application/test_household_canonical_routes.py, tests/application/test_household_parity.py, tests/application/test_household_integrity.py
+Architecture tests: tests/architecture/test_boundaries.py, tests/architecture/test_table_naming_guards.py
+Real-data run: Shan generalized vertical slice passed (17/17), capability composition passed (5/5)
+Performance check: Parallel canonical household route execution and Gate-2 Pandera validation completed in <0.5s
+Compatibility path still present: YES (Legacy household Bronze tables HOUSEHOLD_ZCATEGORY, HOUSEHOLD_ASSET_GROUP, HOUSEHOLD_ASSETS, HOUSEHOLD_CURRENCY, HOUSEHOLD_INOUTCOME, HOUSEHOLD_OPENING_BALANCES continue active service for Silver consumption)
+Old path deleted: NO (Phase 053 owns Silver cutover and legacy household Bronze table demolition)
+Exit assertions green: YES (7/7)
+Commits: Pending conventional-commit review and staging
 ```
 
 A phase is incomplete if any required exit assertion is false.
