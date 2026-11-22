@@ -460,3 +460,42 @@ def test_canonical_foundation_contracts_have_zero_storage_or_dataframe_imports()
     assert not violations, "Forbidden imports in canonical foundation contracts:\n" + "\n".join(
         violations
     )
+
+
+def test_compatibility_compiler_has_zero_storage_or_dataframe_imports() -> None:
+    """Verify that configuration source compiler and fingerprinting modules have zero storage or dataframe imports.
+
+    Governing Invariant: Configuration Purity
+    ----------------------------------------
+    config.sources.compiler and config.sources.fingerprint describe validated declarative
+    models and compilation, and must remain pure of dataframe, warehouse, and presentation imports.
+    """
+    config_files = [
+        SRC_ROOT / "config" / "sources" / "compiler.py",
+        SRC_ROOT / "config" / "sources" / "fingerprint.py",
+        SRC_ROOT / "config" / "sources" / "binding_model.py",
+    ]
+    forbidden_modules = {
+        "polars",
+        "pandera",
+        "duckdb",
+        "sqlite3",
+        "personal_finance_etl.domain",
+        "personal_finance_etl.infrastructure",
+        "personal_finance_etl.presentation",
+    }
+    violations: list[str] = []
+
+    for file_path in config_files:
+        assert file_path.is_file(), f"Expected configuration file missing: {file_path}"
+        imports = _extract_imported_modules(file_path)
+        for lineno, mod in imports:
+            for forbidden in forbidden_modules:
+                if mod == forbidden or mod.startswith(forbidden + "."):
+                    violations.append(
+                        f"{file_path.name}:{lineno} imports '{mod}' (forbidden in configuration models and compiler)"
+                    )
+
+    assert not violations, "Forbidden imports in configuration compiler/models:\n" + "\n".join(
+        violations
+    )
