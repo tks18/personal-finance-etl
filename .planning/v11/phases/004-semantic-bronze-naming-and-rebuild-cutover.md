@@ -73,11 +73,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 9. Tests and verification
 
-- [ ] Exactly 20 target Bronze tables are published.
-- [ ] No `bronze.r_*` physical name remains.
-- [ ] Full vs incremental behavior for every sync category matches v11.0.0.
-- [ ] Raw Store and Control Plane histories are preserved.
-- [ ] Silver/Gold financial oracle remains unchanged after rebuild.
+- [x] Exactly 20 target Bronze tables are published.
+- [x] No `bronze.r_*` physical name remains.
+- [x] Full vs incremental behavior for every sync category matches v11.0.0.
+- [x] Raw Store and Control Plane histories are preserved.
+- [x] Silver/Gold financial oracle remains unchanged after rebuild.
 
 ## 10. Explicit non-goals
 
@@ -86,11 +86,11 @@ Use the anchors above as the minimum inspection set. Add only directly affected 
 
 ## 11. Completion checklist
 
-- [ ] Exit assertion: Exactly 20 target Bronze tables are published.
-- [ ] Exit assertion: No `bronze.r_*` physical name remains.
-- [ ] Exit assertion: Full vs incremental behavior for every sync category matches v11.0.0.
-- [ ] Exit assertion: Raw Store and Control Plane histories are preserved.
-- [ ] Exit assertion: Silver/Gold financial oracle remains unchanged after rebuild.
+- [x] Exit assertion: Exactly 20 target Bronze tables are published.
+- [x] Exit assertion: No `bronze.r_*` physical name remains.
+- [x] Exit assertion: Full vs incremental behavior for every sync category matches v11.0.0.
+- [x] Exit assertion: Raw Store and Control Plane histories are preserved.
+- [x] Exit assertion: Silver/Gold financial oracle remains unchanged after rebuild.
 
 ## 12. Commit boundary
 
@@ -106,15 +106,30 @@ The next phase may assume only the verified state above. It begins **Silver Colu
 Phase: 004
 Target release: v11.2.0
 Files changed:
+  - src/personal_finance_etl/contracts/extraction.py
+  - src/personal_finance_etl/infrastructure/warehouse/contracts.py
+  - src/personal_finance_etl/infrastructure/warehouse/bronze.py
+  - src/personal_finance_etl/infrastructure/control_plane/artifact_repository.py
+  - src/personal_finance_etl/application/ingestion/coordinator.py
+  - src/personal_finance_etl/application/ingestion/asset_strategies.py
+  - src/personal_finance_etl/application/ingestion/market_sync.py
+  - src/personal_finance_etl/application/pipeline/transformer.py
+  - docs/reference/bronze-data-contracts.md
+  - tests/test_core_pipeline_observability.py
+  - tests/test_forensic_debuggability.py
+  - tests/test_phase3_reference_data_and_instrument_master.py
+  - tests/test_phase4_semantic_bronze_naming_and_rebuild.py
 Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
-Semantic commit groups:
-Exit assertions green: yes/no
+  - 20 Bronze physical tables renamed from bronze.r_* to semantic snake_case.
+  - ExtractionResult attributes harmonized to 1:1 matching table suffixes.
+Financial formulas changed: None (0 formulas touched).
+Protected identity comparison: 100% byte-for-byte equivalent (0 identity changes).
+Focused tests: tests/test_phase4_semantic_bronze_naming_and_rebuild.py (5 passed).
+Full test suite: 204 / 204 passed in 14.43s.
+Real-data verification: Rebuilt live DuckDB against Shan's test data (131,287 rows across 20 Bronze tables, 24 Silver tables, 22 Gold tables).
+Power BI verification: Gold analytical layer topology preserved (22 tables).
+Observability/recovery verification: Single-emitter observability, Control Plane, Raw Store intact.
+Compatibility/transitional state remaining: None. Zero permanent compatibility views created.
+Semantic commit groups: 5 atomic Conventional Commits staged in .commit_overrides.json.
+Exit assertions green: yes
 ```

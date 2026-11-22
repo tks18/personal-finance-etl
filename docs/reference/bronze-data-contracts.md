@@ -23,26 +23,26 @@ Unlike Silver/Gold, Bronze does not have one giant static DDL catalog. `schema/b
 
 | Extraction attribute | Sync category | Physical table | Mode |
 |---|---|---|---|
-| `zcategory` | `sqlite_source` | `bronze.r_SQLite_ZCategory` | full replace |
-| `assetgroup` | `sqlite_source` | `bronze.r_SQLite_AssetGroup` | full replace |
-| `assets` | `sqlite_source` | `bronze.r_SQLite_Assets` | full replace |
-| `currency` | `sqlite_source` | `bronze.r_SQLite_Currency` | full replace |
-| `inoutcome` | `sqlite_source` | `bronze.r_SQLite_InOutcome` | full replace |
-| `stg_mf_isin_mapping` | `mf_isin` | `bronze.r_MF_ISIN_Mapping` | full replace |
-| `stg_benchmark_mapping` | `benchmark_mapping` | `bronze.r_Benchmark_Mapping` | full replace |
-| `raw_opening_balances` | `opening_balances` | `bronze.r_Opening_Balances` | full replace |
-| `raw_benchmark_master` | `benchmark_master` | `bronze.r_Benchmark_Master` | full replace |
-| `raw_macro_parameters` | `macro_parameters` | `bronze.r_Macro_Parameters` | full replace |
-| `column_master` | `column_master` | `bronze.r_Column_Master` | full replace |
-| `mf_market_data_raw` | `mf_holdings` | `bronze.r_MF_Market_Data` | incremental |
-| `us_stock_transactions_raw` | `us_stock_transactions` | `bronze.r_US_Stock_Transactions` | incremental |
-| `currency_mapping_raw` | `currency_mapping` | `bronze.r_Currency_Mapping` | full replace |
-| `currency_fx_raw` | `currency_history` | `bronze.r_Currency_FX_Data` | incremental |
-| `mf_transactions_raw` | `mf_orders` | `bronze.r_MF_Transactions` | incremental |
-| `stock_market_data_raw` | `stock_pl` | `bronze.r_Stock_Market_Data` | incremental |
-| `stock_transactions_raw` | `stock_orders` | `bronze.r_Stock_Transactions` | incremental |
-| `benchmark_history_raw` | `benchmark_history` | `bronze.r_Benchmark_Data` | incremental |
-| `us_stock_market_data_raw` | `us_stock_market` | `bronze.r_US_Stock_Prices` | incremental |
+| `household_zcategory` | `sqlite_source` | `bronze.household_zcategory` | full replace |
+| `household_asset_group` | `sqlite_source` | `bronze.household_asset_group` | full replace |
+| `household_assets` | `sqlite_source` | `bronze.household_assets` | full replace |
+| `household_currency` | `sqlite_source` | `bronze.household_currency` | full replace |
+| `household_inoutcome` | `sqlite_source` | `bronze.household_inoutcome` | full replace |
+| `column_master` | `column_master` | `bronze.column_master` | full replace |
+| `mutual_fund_instrument_mapping` | `mutual_fund_instrument_mapping` | `bronze.mutual_fund_instrument_mapping` | full replace |
+| `instrument_master` | `instrument_master` | `bronze.instrument_master` | full replace |
+| `opening_balances` | `opening_balances` | `bronze.opening_balances` | full replace |
+| `benchmark_master` | `benchmark_master` | `bronze.benchmark_master` | full replace |
+| `financial_year_parameters` | `financial_year_parameters` | `bronze.financial_year_parameters` | full replace |
+| `currency_reference` | `currency_reference` | `bronze.currency_reference` | full replace |
+| `mf_market_data` | `mf_holdings` | `bronze.mf_market_data` | incremental |
+| `mf_transactions` | `mf_orders` | `bronze.mf_transactions` | incremental |
+| `stock_market_data` | `stock_pl` | `bronze.stock_market_data` | incremental |
+| `stock_transactions` | `stock_orders` | `bronze.stock_transactions` | incremental |
+| `us_stock_transactions` | `us_stock_transactions` | `bronze.us_stock_transactions` | incremental |
+| `currency_fx_rates` | `currency_history` | `bronze.currency_fx_rates` | incremental |
+| `benchmark_history` | `benchmark_history` | `bronze.benchmark_history` | incremental |
+| `us_stock_prices` | `us_stock_market` | `bronze.us_stock_prices` | incremental |
 
 
 ## Replacement semantics
