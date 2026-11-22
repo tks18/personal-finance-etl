@@ -23,7 +23,7 @@ from typing import Protocol
 import polars as pl
 
 from personal_finance_etl.contracts.datasets import DatasetId
-from personal_finance_etl.contracts.sources import SourceId
+from personal_finance_etl.contracts.sources import SourceBindingId, SourceId
 
 
 class ValidationStage(StrEnum):
@@ -92,6 +92,8 @@ class ValidationContext:
         Semantic version of the validating contract.
     run_id : str | None, default=None
         Active execution run identifier for distributed trace correlation.
+    binding_id : SourceBindingId | None, default=None
+        Source binding identifier if validating source-shaped evidence.
     """
 
     stage: ValidationStage
@@ -100,6 +102,7 @@ class ValidationContext:
     contract_id: str = ""
     contract_version: str = "1.0.0"
     run_id: str | None = None
+    binding_id: SourceBindingId | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +131,8 @@ class ValidationResult:
         Actionable remediation guidance for the user or operator.
     duration_ms : float, default=0.0
         Execution duration of the validation evaluation in milliseconds.
+    binding_id : SourceBindingId | None, default=None
+        Source binding identifier if applicable.
     """
 
     is_valid: bool
@@ -140,6 +145,7 @@ class ValidationResult:
     failures: tuple[ValidationCheckFailure, ...]
     remediation: str | None = None
     duration_ms: float = 0.0
+    binding_id: SourceBindingId | None = None
 
 
 class ValidationError(RuntimeError):
@@ -156,8 +162,16 @@ class ValidationError(RuntimeError):
     def __init__(self, result: ValidationResult, message: str | None = None) -> None:
         self.result = result
         if message is None:
+            if result.binding_id is not None:
+                entity_desc = (
+                    f"source '{result.source_id}', binding '{result.binding_id}'"
+                    if result.source_id is not None
+                    else f"binding '{result.binding_id}'"
+                )
+            else:
+                entity_desc = f"dataset '{result.dataset_id.value}'"
             summary_lines = [
-                f"Validation failed for dataset '{result.dataset_id.value}' at stage '{result.stage.value}' "
+                f"Validation failed for {entity_desc} at stage '{result.stage.value}' "
                 f"(contract '{result.contract_id}', affected rows: {result.affected_row_count}):"
             ]
             for failure in result.failures:
