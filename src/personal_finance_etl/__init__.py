@@ -41,6 +41,6 @@ __all__ = [
     "run_app",
 ]
 
-__version__ = "11.0.0"
+__version__ = "11.0.1"
 __author__ = "Sudharshan TK"
 PACKAGE_NAME = "personal-finance-etl"
