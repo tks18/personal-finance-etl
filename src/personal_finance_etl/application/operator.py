@@ -321,290 +321,256 @@ class OperatorService:
             warehouse_schemas=["bronze", "silver", "gold", "meta"],
         )
 
-    def run_doctor(self) -> DoctorReport:
-        """Execute actionable health checks, isolating failures without raw tracebacks."""
-        checks: list[DoctorCheckResult] = []
-
-        # Check 1: Python Runtime Version
+    @staticmethod
+    def _check_runtime() -> DoctorCheckResult:
         py_ver = sys.version_info
         if py_ver >= (3, 13):
-            checks.append(
-                DoctorCheckResult(
-                    name="Python Runtime",
-                    status="PASS",
-                    message=f"Python {py_ver.major}.{py_ver.minor}.{py_ver.micro} is supported (>= 3.13).",
-                )
+            return DoctorCheckResult(
+                name="Python Runtime",
+                status="PASS",
+                message=f"Python {py_ver.major}.{py_ver.minor}.{py_ver.micro} is supported (>= 3.13).",
             )
-        else:
-            checks.append(
-                DoctorCheckResult(
-                    name="Python Runtime",
-                    status="FAIL",
-                    message=f"Python {py_ver.major}.{py_ver.minor}.{py_ver.micro} is unsupported.",
-                    remediation="Install Python >= 3.13 or activate a compliant virtual environment.",
-                )
-            )
+        return DoctorCheckResult(
+            name="Python Runtime",
+            status="FAIL",
+            message=f"Python {py_ver.major}.{py_ver.minor}.{py_ver.micro} is unsupported.",
+            remediation="Install Python >= 3.13 or activate a compliant virtual environment.",
+        )
 
-        # Check 2: Settings Configuration
+    def _check_settings(self) -> DoctorCheckResult:
         if not self.config_path:
-            checks.append(
-                DoctorCheckResult(
-                    name="Settings Configuration",
-                    status="FAIL",
-                    message="Configuration file not found or unconfigured.",
-                    remediation="Provide --config path/to/config.toml or run 'pfetl' to configure your settings.",
-                )
+            return DoctorCheckResult(
+                name="Settings Configuration",
+                status="FAIL",
+                message="Configuration file not found or unconfigured.",
+                remediation="Provide --config path/to/config.toml or run 'pfetl' to configure your settings.",
             )
-        elif not os.path.exists(self.config_path):
-            checks.append(
-                DoctorCheckResult(
-                    name="Settings Configuration",
-                    status="FAIL",
-                    message=f"Configuration file does not exist at '{self.config_path}'.",
-                    remediation="Verify the file path or create a new config.toml.",
-                )
+        if not os.path.exists(self.config_path):
+            return DoctorCheckResult(
+                name="Settings Configuration",
+                status="FAIL",
+                message=f"Configuration file does not exist at '{self.config_path}'.",
+                remediation="Verify the file path or create a new config.toml.",
             )
-        else:
-            try:
-                Settings.from_toml(self.config_path)
-                checks.append(
-                    DoctorCheckResult(
-                        name="Settings Configuration",
-                        status="PASS",
-                        message=f"Valid settings at '{self.config_path}'.",
-                    )
-                )
-            except Exception as e:
-                checks.append(
-                    DoctorCheckResult(
-                        name="Settings Configuration",
-                        status="FAIL",
-                        message=f"Configuration parsing error: {e}",
-                        remediation="Inspect and fix the syntax or schema keys in your config.toml.",
-                    )
-                )
+        try:
+            Settings.from_toml(self.config_path)
+            return DoctorCheckResult(
+                name="Settings Configuration",
+                status="PASS",
+                message=f"Valid settings at '{self.config_path}'.",
+            )
+        except Exception as e:
+            return DoctorCheckResult(
+                name="Settings Configuration",
+                status="FAIL",
+                message=f"Configuration parsing error: {e}",
+                remediation="Inspect and fix the syntax or schema keys in your config.toml.",
+            )
 
-        # Check 3: Financial Rules
+    def _check_rules(self) -> DoctorCheckResult:
         if not self.rules_path:
-            checks.append(
-                DoctorCheckResult(
-                    name="Financial Rules",
-                    status="WARN",
-                    message="Financial rules TOML not specified; defaults will apply.",
-                    remediation="Provide --rules path/to/rules.toml if custom portfolio, tax, or FIRE rules are required.",
-                )
+            return DoctorCheckResult(
+                name="Financial Rules",
+                status="WARN",
+                message="Financial rules TOML not specified; defaults will apply.",
+                remediation="Provide --rules path/to/rules.toml if custom portfolio, tax, or FIRE rules are required.",
             )
-        elif not os.path.exists(self.rules_path):
-            checks.append(
-                DoctorCheckResult(
-                    name="Financial Rules",
-                    status="FAIL",
-                    message=f"Financial rules file does not exist at '{self.rules_path}'.",
-                    remediation="Verify the rules file path or provide a valid rules.toml.",
-                )
+        if not os.path.exists(self.rules_path):
+            return DoctorCheckResult(
+                name="Financial Rules",
+                status="FAIL",
+                message=f"Financial rules file does not exist at '{self.rules_path}'.",
+                remediation="Verify the rules file path or provide a valid rules.toml.",
             )
-        else:
-            try:
-                FinancialRules.from_toml(self.rules_path)
-                checks.append(
-                    DoctorCheckResult(
-                        name="Financial Rules",
-                        status="PASS",
-                        message=f"Valid financial rules at '{self.rules_path}'.",
-                    )
-                )
-            except Exception as e:
-                checks.append(
-                    DoctorCheckResult(
-                        name="Financial Rules",
-                        status="FAIL",
-                        message=f"Rules parsing error: {e}",
-                        remediation="Inspect and fix syntax or policy definitions in your rules.toml.",
-                    )
-                )
+        try:
+            FinancialRules.from_toml(self.rules_path)
+            return DoctorCheckResult(
+                name="Financial Rules",
+                status="PASS",
+                message=f"Valid financial rules at '{self.rules_path}'.",
+            )
+        except Exception as e:
+            return DoctorCheckResult(
+                name="Financial Rules",
+                status="FAIL",
+                message=f"Rules parsing error: {e}",
+                remediation="Inspect and fix syntax or policy definitions in your rules.toml.",
+            )
 
-        # Check 4: Evidence Directory / Storage
-        settings = self._load_settings_safe()
+    @staticmethod
+    def _check_evidence(settings: Settings | None) -> DoctorCheckResult:
         if settings and settings.sources and settings.sources.statements_root:
             st_root = str(settings.sources.statements_root)
             if os.path.exists(st_root) and os.path.isdir(st_root):
-                checks.append(
-                    DoctorCheckResult(
-                        name="Evidence Storage",
-                        status="PASS",
-                        message=f"Statements root accessible at '{st_root}'.",
-                    )
-                )
-            else:
-                checks.append(
-                    DoctorCheckResult(
-                        name="Evidence Storage",
-                        status="FAIL",
-                        message=f"Statements root not found or inaccessible at '{st_root}'.",
-                        remediation=f"Ensure directory '{st_root}' exists and has read permissions.",
-                    )
-                )
-        else:
-            checks.append(
-                DoctorCheckResult(
+                return DoctorCheckResult(
                     name="Evidence Storage",
-                    status="WARN",
-                    message="Statements root is not configured in settings.",
-                    remediation="Define sources.statements_root in your config.toml.",
+                    status="PASS",
+                    message=f"Statements root accessible at '{st_root}'.",
                 )
+            return DoctorCheckResult(
+                name="Evidence Storage",
+                status="FAIL",
+                message=f"Statements root not found or inaccessible at '{st_root}'.",
+                remediation=f"Ensure directory '{st_root}' exists and has read permissions.",
+            )
+        return DoctorCheckResult(
+            name="Evidence Storage",
+            status="WARN",
+            message="Statements root is not configured in settings.",
+            remediation="Define sources.statements_root in your config.toml.",
+        )
+
+    @staticmethod
+    def _check_control_plane(settings: Settings | None) -> DoctorCheckResult | None:
+        if not settings:
+            return None
+        base_dir = settings.database.target_db_base_path
+        sqlite_file = os.path.join(base_dir, settings.database.raw_document_store_name)
+        if not os.path.exists(base_dir):
+            return DoctorCheckResult(
+                name="Control Plane (SQLite)",
+                status="WARN",
+                message=f"Database target directory does not exist at '{base_dir}'.",
+                remediation="The directory will be created automatically on the next 'pfetl run'.",
+            )
+        if not os.path.exists(sqlite_file):
+            return DoctorCheckResult(
+                name="Control Plane (SQLite)",
+                status="WARN",
+                message=f"Raw document store not found at '{sqlite_file}'.",
+                remediation="Run 'pfetl run' to bootstrap and initialize the operational control plane.",
+            )
+        try:
+            uri = f"file:{os.path.abspath(sqlite_file)}?mode=ro"
+            with sqlite3.connect(uri, uri=True, timeout=1.0) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tbls = {r[0] for r in cursor.fetchall()}
+                if "cp_runs" in tbls and "cp_artifacts" in tbls:
+                    return DoctorCheckResult(
+                        name="Control Plane (SQLite)",
+                        status="PASS",
+                        message=f"Control plane operational ({len(tbls)} tables).",
+                    )
+                return DoctorCheckResult(
+                    name="Control Plane (SQLite)",
+                    status="WARN",
+                    message="Control plane schema tables partially initialized.",
+                    remediation="Execute 'pfetl run' to converge schemas.",
+                )
+        except Exception as e:
+            return DoctorCheckResult(
+                name="Control Plane (SQLite)",
+                status="FAIL",
+                message=f"Cannot read control plane database: {e}",
+                remediation="Check database file locks or permissions on Raw_Documents.sqlite.",
             )
 
-        # Check 5: Database Paths & Control Plane (SQLite)
-        if settings:
-            base_dir = settings.database.target_db_base_path
-            sqlite_file = os.path.join(base_dir, settings.database.raw_document_store_name)
-            if not os.path.exists(base_dir):
-                checks.append(
-                    DoctorCheckResult(
-                        name="Control Plane (SQLite)",
-                        status="WARN",
-                        message=f"Database target directory does not exist at '{base_dir}'.",
-                        remediation="The directory will be created automatically on the next 'pfetl run'.",
-                    )
+    @staticmethod
+    def _check_warehouse(settings: Settings | None) -> DoctorCheckResult | None:
+        if not settings:
+            return None
+        base_dir = settings.database.target_db_base_path
+        duckdb_file = os.path.join(base_dir, settings.database.target_db_name)
+        if not os.path.exists(duckdb_file):
+            return DoctorCheckResult(
+                name="Analytical Warehouse (DuckDB)",
+                status="WARN",
+                message=f"DuckDB database not found at '{duckdb_file}'.",
+                remediation="Run 'pfetl run' to build the analytical lakehouse.",
+            )
+        try:
+            duck_conn = duckdb.connect(duckdb_file, read_only=True)
+            schemas = {
+                r[0]
+                for r in duck_conn.execute(
+                    "SELECT schema_name FROM information_schema.schemata"
+                ).fetchall()
+            }
+            duck_conn.close()
+            if {"bronze", "silver", "gold"}.issubset(schemas):
+                return DoctorCheckResult(
+                    name="Analytical Warehouse (DuckDB)",
+                    status="PASS",
+                    message="DuckDB lakehouse online with bronze, silver, and gold schemas.",
                 )
-            elif not os.path.exists(sqlite_file):
-                checks.append(
-                    DoctorCheckResult(
-                        name="Control Plane (SQLite)",
-                        status="WARN",
-                        message=f"Raw document store not found at '{sqlite_file}'.",
-                        remediation="Run 'pfetl run' to bootstrap and initialize the operational control plane.",
-                    )
-                )
-            else:
-                try:
-                    uri = f"file:{os.path.abspath(sqlite_file)}?mode=ro"
-                    with sqlite3.connect(uri, uri=True, timeout=1.0) as conn:
-                        cursor = conn.cursor()
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-                        tbls = {r[0] for r in cursor.fetchall()}
-                        if "cp_runs" in tbls and "cp_artifacts" in tbls:
-                            checks.append(
-                                DoctorCheckResult(
-                                    name="Control Plane (SQLite)",
-                                    status="PASS",
-                                    message=f"Control plane operational ({len(tbls)} tables).",
-                                )
-                            )
-                        else:
-                            checks.append(
-                                DoctorCheckResult(
-                                    name="Control Plane (SQLite)",
-                                    status="WARN",
-                                    message="Control plane schema tables partially initialized.",
-                                    remediation="Execute 'pfetl run' to converge schemas.",
-                                )
-                            )
-                except Exception as e:
-                    checks.append(
-                        DoctorCheckResult(
-                            name="Control Plane (SQLite)",
-                            status="FAIL",
-                            message=f"Cannot read control plane database: {e}",
-                            remediation="Check database file locks or permissions on Raw_Documents.sqlite.",
-                        )
-                    )
+            return DoctorCheckResult(
+                name="Analytical Warehouse (DuckDB)",
+                status="WARN",
+                message=f"DuckDB present but missing schemas: {schemas}",
+                remediation="Run 'pfetl run' to generate missing schemas.",
+            )
+        except Exception as e:
+            return DoctorCheckResult(
+                name="Analytical Warehouse (DuckDB)",
+                status="FAIL",
+                message=f"DuckDB read error: {e}",
+                remediation="Ensure no exclusive write locks exist on Personal_Finance_DB.duckdb.",
+            )
 
-        # Check 6: Analytical Warehouse (DuckDB)
-        if settings:
-            base_dir = settings.database.target_db_base_path
-            duckdb_file = os.path.join(base_dir, settings.database.target_db_name)
-            if not os.path.exists(duckdb_file):
-                checks.append(
-                    DoctorCheckResult(
-                        name="Analytical Warehouse (DuckDB)",
-                        status="WARN",
-                        message=f"DuckDB database not found at '{duckdb_file}'.",
-                        remediation="Run 'pfetl run' to build the analytical lakehouse.",
-                    )
-                )
-            else:
-                try:
-                    duck_conn = duckdb.connect(duckdb_file, read_only=True)
-                    schemas = {
-                        r[0]
-                        for r in duck_conn.execute(
-                            "SELECT schema_name FROM information_schema.schemata"
-                        ).fetchall()
-                    }
-                    duck_conn.close()
-                    if {"bronze", "silver", "gold"}.issubset(schemas):
-                        checks.append(
-                            DoctorCheckResult(
-                                name="Analytical Warehouse (DuckDB)",
-                                status="PASS",
-                                message="DuckDB lakehouse online with bronze, silver, and gold schemas.",
-                            )
-                        )
-                    else:
-                        checks.append(
-                            DoctorCheckResult(
-                                name="Analytical Warehouse (DuckDB)",
-                                status="WARN",
-                                message=f"DuckDB present but missing schemas: {schemas}",
-                                remediation="Run 'pfetl run' to generate missing schemas.",
-                            )
-                        )
-                except Exception as e:
-                    checks.append(
-                        DoctorCheckResult(
-                            name="Analytical Warehouse (DuckDB)",
-                            status="FAIL",
-                            message=f"DuckDB read error: {e}",
-                            remediation="Ensure no exclusive write locks exist on Personal_Finance_DB.duckdb.",
-                        )
-                    )
+    @staticmethod
+    def _check_pipeline_lock(settings: Settings | None) -> DoctorCheckResult | None:
+        if not settings:
+            return None
+        base_dir = settings.database.target_db_base_path
+        lock_path = os.path.join(base_dir, "pipeline.lock")
+        if os.path.exists(lock_path) and FileLock(lock_path).is_locked:
+            return DoctorCheckResult(
+                name="Pipeline Lock",
+                status="WARN",
+                message="Pipeline is currently locked by an active process.",
+                remediation="Wait for current run to complete, or remove pipeline.lock if previous process crashed.",
+            )
+        return DoctorCheckResult(
+            name="Pipeline Lock",
+            status="PASS",
+            message="Pipeline lock is free and available.",
+        )
 
-        # Check 7: Pipeline Lock & Recovery State
-        if settings:
-            base_dir = settings.database.target_db_base_path
-            lock_path = os.path.join(base_dir, "pipeline.lock")
-            if os.path.exists(lock_path) and FileLock(lock_path).is_locked:
-                checks.append(
-                    DoctorCheckResult(
-                        name="Pipeline Lock",
-                        status="WARN",
-                        message="Pipeline is currently locked by an active process.",
-                        remediation="Wait for current run to complete, or remove pipeline.lock if previous process crashed.",
-                    )
-                )
-            else:
-                checks.append(
-                    DoctorCheckResult(
-                        name="Pipeline Lock",
-                        status="PASS",
-                        message="Pipeline lock is free and available.",
-                    )
-                )
-
-        # Check 8: Market Data Connectivity
+    @staticmethod
+    def _check_market_data() -> DoctorCheckResult:
         try:
             req = urllib.request.Request(
                 "https://query1.finance.yahoo.com",
                 headers={"User-Agent": "pfetl-doctor/1.0"},
             )
             with urllib.request.urlopen(req, timeout=2.5):
-                checks.append(
-                    DoctorCheckResult(
-                        name="Market Data Provider",
-                        status="PASS",
-                        message="External market data provider (yfinance) is reachable.",
-                    )
+                return DoctorCheckResult(
+                    name="Market Data Provider",
+                    status="PASS",
+                    message="External market data provider (yfinance) is reachable.",
                 )
         except Exception:
-            checks.append(
-                DoctorCheckResult(
-                    name="Market Data Provider",
-                    status="WARN",
-                    message="Market data provider is unreachable (offline mode).",
-                    remediation="Check internet connection if market prices and FX rate syncs are needed.",
-                )
+            return DoctorCheckResult(
+                name="Market Data Provider",
+                status="WARN",
+                message="Market data provider is unreachable (offline mode).",
+                remediation="Check internet connection if market prices and FX rate syncs are needed.",
             )
+
+    def run_doctor(self) -> DoctorReport:
+        """Execute actionable health checks, isolating failures without raw tracebacks."""
+        settings = self._load_settings_safe()
+        checks: list[DoctorCheckResult] = [
+            self._check_runtime(),
+            self._check_settings(),
+            self._check_rules(),
+            self._check_evidence(settings),
+        ]
+
+        cp_check = self._check_control_plane(settings)
+        if cp_check:
+            checks.append(cp_check)
+
+        wh_check = self._check_warehouse(settings)
+        if wh_check:
+            checks.append(wh_check)
+
+        lock_check = self._check_pipeline_lock(settings)
+        if lock_check:
+            checks.append(lock_check)
+
+        checks.append(self._check_market_data())
 
         passed = sum(1 for c in checks if c.status == "PASS")
         warns = sum(1 for c in checks if c.status == "WARN")
