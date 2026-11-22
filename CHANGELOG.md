@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [10.3.3](https://github.com/tks18/personal-finance-etl/compare/10.3.2...10.3.3) (2026-11-22)
+
+
+### Bug Fixes 🛠
+
+* **control-plane:** preserve removed file status in artifact sync ([d4188a3](https://github.com/tks18/personal-finance-etl/commit/d4188a328a88c032c5a385eb8033dad7a2816a03))
+
+
+### Features 🔥
+
+* **contracts:** add binding context to validation and source plans ([30149b9](https://github.com/tks18/personal-finance-etl/commit/30149b9fcbb80aeb79cce85ed66f6f3a73809b60))
+* **diagnostics:** adapt replay engine and diagnostics to bindings ([7509ec0](https://github.com/tks18/personal-finance-etl/commit/7509ec0e9bb909857abd34edabfd69abdb518a43))
+* **ingestion:** cut over slice runner and market sync to bindings ([7052858](https://github.com/tks18/personal-finance-etl/commit/7052858b4c43471727fe473024c3b0e0d2bda1ae))
+* **pipeline:** implement binding-aware source planning and discovery ([575b546](https://github.com/tks18/personal-finance-etl/commit/575b5469ae22820dcb7f23ce773571ce8de71b5b))
+* **warehouse:** add pre-bronze table upgrade and recovery healing ([2eb9af3](https://github.com/tks18/personal-finance-etl/commit/2eb9af318d94aeb1ab517fc788917b2d184bd26e))
+* **warehouse:** rekey pre-bronze layer by source binding identity ([bff322c](https://github.com/tks18/personal-finance-etl/commit/bff322c90e8cdff73aec55d85925347874600588))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 048 pre-bronze cutover specifications ([9b6008c](https://github.com/tks18/personal-finance-etl/commit/9b6008c4acae6a238ebb21e157983d86ae7e6529))
+
 ### [10.3.2](https://github.com/tks18/personal-finance-etl/compare/10.3.1...10.3.2) (2026-11-22)
 
 
