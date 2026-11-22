@@ -127,11 +127,13 @@ class TransformationDAG:
             extracted.assets, mappings["assets"], self.rules
         )
         d_currency_lazy = transform_d_currency(
-            extracted.currency, mappings["currency"], extracted.currency_mapping_raw
+            extracted.currency, mappings["currency"], extracted.raw_currency_reference
         )
 
         diagnostics.debug("Transforming Macro Parameters and Opening Balances...")
-        d_macro_parameters_lazy = transform_d_macro_parameters(extracted.raw_macro_parameters)
+        d_macro_parameters_lazy = transform_d_macro_parameters(
+            extracted.raw_financial_year_parameters
+        )
         d_benchmark_master_lazy = transform_d_investment_benchmark_master(
             extracted.raw_benchmark_master
         )
@@ -255,7 +257,7 @@ class TransformationDAG:
         diagnostics.debug("Building Investment Master...")
         d_tf_investment_master_lazy = get_d_investment_master(
             master_ref_lazy_list,
-            extracted.stg_benchmark_mapping,
+            extracted.raw_instrument_master,
             self.rules.DEFAULT_CURRENCY_ID,
         )
 
