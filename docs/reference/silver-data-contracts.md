@@ -34,20 +34,20 @@ Source: `src/personal_finance_etl/infrastructure/warehouse/registry.py`
 | `df_d_currency` | `silver.dim_currency` | Common | `Currency` | `CoreEngine` | 80 |
 | `df_d_benchmark_master` | `silver.dim_benchmark_master` | Investments | `Benchmark` | `CoreEngine` | 90 |
 | `df_f_currency_fx_rates` | `silver.fact_currency_fx_rates` | Common | `Date-Currency` | `CoreEngine` | 95 |
-| `df_d_investment_master` | `silver.d_Investment_Master` | Investments | `ISIN` | `CoreEngine` | 100 |
+| `df_d_investment_master` | `silver.dim_instrument_master` | Investments | `ISIN` | `CoreEngine` | 100 |
 | `df_d_macro_parameters` | `silver.ref_financial_year_parameters` | Investments | `FinancialYear` | `CoreEngine` | 110 |
 | `df_f_income_transactions` | `silver.fact_income_transactions` | Wealth | `Transaction` | `CoreEngine` | 120 |
 | `df_f_expense_transactions` | `silver.fact_expense_transactions` | Wealth | `Transaction` | `CoreEngine` | 130 |
 | `df_f_transfer_transactions` | `silver.fact_transfer_transactions` | Wealth | `Transaction` | `CoreEngine` | 140 |
 | `df_f_opening_balances` | `silver.fact_opening_balances` | Wealth | `Balance` | `CoreEngine` | 150 |
-| `df_f_investment_market_data` | `silver.f_Investment_Market_Data` | Investments | `Quote` | `CoreEngine` | 160 |
-| `df_f_tf_inv_purchase` | `silver.f_Investment_Purchase_Data` | Investments | `Trade` | `CoreEngine` | 170 |
-| `df_f_tf_inv_sale` | `silver.f_Investment_Sale_Data` | Investments | `Trade` | `CoreEngine` | 180 |
-| `df_f_investment_benchmark_data` | `silver.f_Investment_Benchmark_Data` | Investments | `Quote` | `CoreEngine` | 190 |
-| `df_f_investment_analytics_lot` | `silver.f_Investment_Analytics_Lot` | Investments | `ISIN-Lot` | `InvestmentQuantEngine` | 200 |
-| `df_f_investment_realized_events` | `silver.f_Investment_Realized_Events` | Investments | `RealizedEvent` | `InvestmentQuantEngine` | 205 |
-| `df_f_investment_reconciliation_events` | `silver.f_Investment_Reconciliation_Events` | Investments | `ReconEvent` | `InvestmentQuantEngine` | 206 |
-| `df_f_tax_events` | `silver.f_Tax_Events` | Taxes | `TaxEvent` | `TaxEngine` | 300 |
+| `df_f_investment_market_data` | `silver.fact_investment_market_data` | Investments | `Quote` | `CoreEngine` | 160 |
+| `df_f_tf_inv_purchase` | `silver.fact_investment_purchases` | Investments | `Trade` | `CoreEngine` | 170 |
+| `df_f_tf_inv_sale` | `silver.fact_investment_sales` | Investments | `Trade` | `CoreEngine` | 180 |
+| `df_f_investment_benchmark_data` | `silver.fact_investment_benchmark_data` | Investments | `Quote` | `CoreEngine` | 190 |
+| `df_f_investment_analytics_lot` | `silver.fact_investment_lot_analytics` | Investments | `ISIN-Lot` | `InvestmentQuantEngine` | 200 |
+| `df_f_investment_realized_events` | `silver.fact_investment_realized_events` | Investments | `RealizedEvent` | `InvestmentQuantEngine` | 205 |
+| `df_f_investment_reconciliation_events` | `silver.fact_investment_reconciliation_events` | Investments | `ReconEvent` | `InvestmentQuantEngine` | 206 |
+| `df_f_tax_events` | `silver.fact_tax_events` | Taxes | `TaxEvent` | `TaxEngine` | 300 |
 
 
 ## Physical schemas
@@ -444,7 +444,7 @@ The following tables are generated directly from `schema/silver.py`. Column orde
 | `Benchmark_Name` | `TEXT` | Descriptors/Classifications |
 | `yF_Ticker` | `TEXT` | Descriptors/Classifications |
 
-### `silver.d_Investment_Master`
+### `silver.dim_instrument_master`
 
 **Contract ID:** `df_d_investment_master`  
 **Grain:** `ISIN`  
@@ -516,7 +516,7 @@ The following tables are generated directly from `schema/silver.py`. Column orde
 
 - `FOREIGN KEY(FY_Start_Date) REFERENCES silver.dim_calendar(Date)`
 
-### `silver.f_Investment_Market_Data`
+### `silver.fact_investment_market_data`
 
 **Contract ID:** `df_f_investment_market_data`  
 **Grain:** `Quote`  
@@ -552,10 +552,10 @@ The following tables are generated directly from `schema/silver.py`. Column orde
 **Table constraints**
 
 - `FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date)`
-- `FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN)`
+- `FOREIGN KEY(ISIN) REFERENCES silver.dim_instrument_master(ISIN)`
 - `FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID)`
 
-### `silver.f_Investment_Purchase_Data`
+### `silver.fact_investment_purchases`
 
 **Contract ID:** `df_f_tf_inv_purchase`  
 **Grain:** `Trade`  
@@ -576,16 +576,14 @@ The following tables are generated directly from `schema/silver.py`. Column orde
 | `Price_Local` | `DOUBLE` | Local/FX Values |
 | `Value_Local` | `DOUBLE` | Local/FX Values |
 | `FX_Rate` | `DOUBLE` | Local/FX Values |
-| `__file_name__` | `TEXT` | Local/FX Values |
-| `__folder_path__` | `TEXT` | Local/FX Values |
 
 **Table constraints**
 
 - `FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date)`
-- `FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN)`
+- `FOREIGN KEY(ISIN) REFERENCES silver.dim_instrument_master(ISIN)`
 - `FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID)`
 
-### `silver.f_Investment_Sale_Data`
+### `silver.fact_investment_sales`
 
 **Contract ID:** `df_f_tf_inv_sale`  
 **Grain:** `Trade`  
@@ -612,16 +610,14 @@ The following tables are generated directly from `schema/silver.py`. Column orde
 | `FX_Rate` | `DOUBLE` | Local/FX Values |
 | `Unit_PnL` | `DOUBLE` | Absolute Returns |
 | `Total_PnL` | `DOUBLE` | Absolute Returns |
-| `__file_name__` | `TEXT` | Absolute Returns |
-| `__folder_path__` | `TEXT` | Absolute Returns |
 
 **Table constraints**
 
 - `FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date)`
-- `FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN)`
+- `FOREIGN KEY(ISIN) REFERENCES silver.dim_instrument_master(ISIN)`
 - `FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID)`
 
-### `silver.f_Investment_Benchmark_Data`
+### `silver.fact_investment_benchmark_data`
 
 **Contract ID:** `df_f_investment_benchmark_data`  
 **Grain:** `Quote`  
@@ -649,7 +645,7 @@ The following tables are generated directly from `schema/silver.py`. Column orde
 - `FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date)`
 - `FOREIGN KEY(ID) REFERENCES silver.dim_benchmark_master(ID)`
 
-### `silver.f_Investment_Analytics_Lot`
+### `silver.fact_investment_lot_analytics`
 
 **Contract ID:** `df_f_investment_analytics_lot`  
 **Grain:** `ISIN-Lot`  
@@ -749,7 +745,7 @@ The following tables are generated directly from `schema/silver.py`. Column orde
 | `Harvest_Recommendation` | `TEXT` | Tax & Harvesting |
 | `PRIMARY` | `KEY (Lot_ID, Closing_Date)` | Tax & Harvesting |
 
-### `silver.f_Investment_Realized_Events`
+### `silver.fact_investment_realized_events`
 
 **Contract ID:** `df_f_investment_realized_events`  
 **Grain:** `RealizedEvent`  
@@ -785,7 +781,7 @@ The following tables are generated directly from `schema/silver.py`. Column orde
 | `Estimated_Tax` | `DOUBLE` | NULL for CHECK_REQUIRED (RECONCILIATION) lots — no reliable rate can be assigned. |
 | `UNIQUE(Sale_ID,` | `Lot_ID)` | NULL for CHECK_REQUIRED (RECONCILIATION) lots — no reliable rate can be assigned. |
 
-### `silver.f_Investment_Reconciliation_Events`
+### `silver.fact_investment_reconciliation_events`
 
 **Contract ID:** `df_f_investment_reconciliation_events`  
 **Grain:** `ReconEvent`  
@@ -813,7 +809,7 @@ The following tables are generated directly from `schema/silver.py`. Column orde
 | `Original_Unit_Cost` | `DOUBLE` | General |
 | `Adjusted_Unit_Cost` | `DOUBLE` | General |
 
-### `silver.f_Tax_Events`
+### `silver.fact_tax_events`
 
 **Contract ID:** `df_f_tax_events`  
 **Grain:** `TaxEvent`  

@@ -40,20 +40,20 @@ Those concepts overlap, but they are not synonyms. A table can have a valid phys
 | Silver | `silver.dim_currency` | `Currency` |
 | Silver | `silver.dim_benchmark_master` | `Benchmark` |
 | Silver | `silver.fact_currency_fx_rates` | `Date-Currency` |
-| Silver | `silver.d_Investment_Master` | `ISIN` |
+| Silver | `silver.dim_instrument_master` | `ISIN` |
 | Silver | `silver.ref_financial_year_parameters` | `FinancialYear` |
 | Silver | `silver.fact_income_transactions` | `Transaction` |
 | Silver | `silver.fact_expense_transactions` | `Transaction` |
 | Silver | `silver.fact_transfer_transactions` | `Transaction` |
 | Silver | `silver.fact_opening_balances` | `Balance` |
-| Silver | `silver.f_Investment_Market_Data` | `Quote` |
-| Silver | `silver.f_Investment_Purchase_Data` | `Trade` |
-| Silver | `silver.f_Investment_Sale_Data` | `Trade` |
-| Silver | `silver.f_Investment_Benchmark_Data` | `Quote` |
-| Silver | `silver.f_Investment_Analytics_Lot` | `ISIN-Lot` |
-| Silver | `silver.f_Investment_Realized_Events` | `RealizedEvent` |
-| Silver | `silver.f_Investment_Reconciliation_Events` | `ReconEvent` |
-| Silver | `silver.f_Tax_Events` | `TaxEvent` |
+| Silver | `silver.fact_investment_market_data` | `Quote` |
+| Silver | `silver.fact_investment_purchases` | `Trade` |
+| Silver | `silver.fact_investment_sales` | `Trade` |
+| Silver | `silver.fact_investment_benchmark_data` | `Quote` |
+| Silver | `silver.fact_investment_lot_analytics` | `ISIN-Lot` |
+| Silver | `silver.fact_investment_realized_events` | `RealizedEvent` |
+| Silver | `silver.fact_investment_reconciliation_events` | `ReconEvent` |
+| Silver | `silver.fact_tax_events` | `TaxEvent` |
 
 
 ## Deterministic identity namespaces

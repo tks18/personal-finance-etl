@@ -127,14 +127,14 @@ FX and macro context
 
 ```mermaid
 erDiagram
-    D_INVESTMENT_MASTER ||--o{ F_INVESTMENT_PURCHASE_DATA : instrument
-    D_INVESTMENT_MASTER ||--o{ F_INVESTMENT_SALE_DATA : instrument
-    D_INVESTMENT_MASTER ||--o{ F_INVESTMENT_MARKET_DATA : instrument
-    DIM_BENCHMARK_MASTER ||--o{ F_INVESTMENT_BENCHMARK_DATA : benchmark
+    DIM_INSTRUMENT_MASTER ||--o{ FACT_INVESTMENT_PURCHASES : instrument
+    DIM_INSTRUMENT_MASTER ||--o{ FACT_INVESTMENT_SALES : instrument
+    DIM_INSTRUMENT_MASTER ||--o{ FACT_INVESTMENT_MARKET_DATA : instrument
+    DIM_BENCHMARK_MASTER ||--o{ FACT_INVESTMENT_BENCHMARK_DATA : benchmark
     DIM_CURRENCY ||--o{ FACT_CURRENCY_FX_RATES : currency
 ```
 
-`silver.d_Investment_Master` supplies canonical instrument attributes. `silver.f_Investment_Purchase_Data` and `silver.f_Investment_Sale_Data` are trade-grain facts. `silver.f_Investment_Market_Data` is market/valuation evidence. Combining these inputs into a portfolio snapshot requires an algorithm, not a join that assumes market value and cost basis are the same thing.
+`silver.dim_instrument_master` supplies canonical instrument attributes. `silver.fact_investment_purchases` and `silver.fact_investment_sales` are trade-grain facts. `silver.fact_investment_market_data` is market/valuation evidence. Combining these inputs into a portfolio snapshot requires an algorithm, not a join that assumes market value and cost basis are the same thing.
 
 Mutual funds, Indian equities and US equities normalize into the common investment model, but source provenance remains relevant. Historical US holdings may be reconstructed from transactions and market data rather than directly observed in a complete daily broker history. The resulting market-state record must not masquerade as an observed acquisition lot.
 
@@ -157,9 +157,9 @@ flowchart LR
 
 The warehouse publishes distinct canonical investment facts, including:
 
-- `silver.f_Investment_Analytics_Lot`: lot-oriented reconstructed holding state;
-- `silver.f_Investment_Realized_Events`: realization fragments/events;
-- `silver.f_Investment_Reconciliation_Events`: explicit differences between observation and reconstruction.
+- `silver.fact_investment_lot_analytics`: lot-oriented reconstructed holding state;
+- `silver.fact_investment_realized_events`: realization fragments/events;
+- `silver.fact_investment_reconciliation_events`: explicit differences between observation and reconstruction.
 
 The source authority for the *meaning* of these records is `domain/investments/` and its typed contracts. The warehouse schema is the persistence contract, not the algorithm definition.
 
@@ -193,7 +193,7 @@ The canonical purchase schema demonstrates that the warehouse does not identify 
 
 ```sql
 -- infrastructure/warehouse/schema/silver.py (SILVER_DDL)
-CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
+CREATE TABLE IF NOT EXISTS silver.fact_investment_purchases (
     Purchase_ID TEXT PRIMARY KEY,
     Date DATE NOT NULL,
     ISIN TEXT NOT NULL,
@@ -213,7 +213,7 @@ Realization has a different grain. One sale can consume more than one acquisitio
 
 ```sql
 -- infrastructure/warehouse/schema/silver.py (SILVER_DDL)
-CREATE TABLE IF NOT EXISTS silver.f_Investment_Realized_Events (
+CREATE TABLE IF NOT EXISTS silver.fact_investment_realized_events (
     Realized_Event_ID TEXT PRIMARY KEY,
     Sale_ID TEXT NOT NULL,
     Lot_ID TEXT NOT NULL,
@@ -231,7 +231,7 @@ Tax events have yet another authority and shape:
 
 ```sql
 -- infrastructure/warehouse/schema/silver.py (SILVER_DDL)
-CREATE TABLE IF NOT EXISTS silver.f_Tax_Events (
+CREATE TABLE IF NOT EXISTS silver.fact_tax_events (
     Tax_Event_ID TEXT PRIMARY KEY,
     FY TEXT NOT NULL,
     Event_Date DATE NOT NULL,
