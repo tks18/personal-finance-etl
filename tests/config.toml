@@ -1,19 +1,32 @@
-SOURCE_DB_FOLDER = "...\\SOURCE_DB.db"
-TARGET_DB_BASE_PATH = "...\\outputs"
+[database]
+target_db_base_path = "...\\outputs"
+target_db_name = "Personal_Finance_DB.duckdb"
+raw_document_store_name = "Personal_Finance_DB_Raw_Store.sqlite"
+disable_file_discoverer = false
 
-# Raw Store Config
-ENABLE_RAW_DOCUMENT_STORE = false
-RAW_DOCUMENT_STORE_NAME = "Raw_Documents.sqlite"
-FORCE_REBUILD_RAW_STORE = true
+[sources]
+household_database = "...\\SOURCE_DB.db"
+statements_root = "...\\Statements"
+column_master = "...\\COLUMN_MASTER.csv"
+mutual_fund_instrument_mapping = "...\\MF_ISIN_MAPPING.csv"
+instrument_master = "...\\BENCHMARK_MAPPING.csv"
+benchmark_master = "...\\BENCHMARK_MASTER.csv"
+currency_reference = "...\\CURRENCY_MAPPING.csv"
+financial_year_parameters = "...\\MACRO_PARAMETERS.csv"
+opening_balances = "...\\OPENING_BALANCE.csv"
 
-# Dependencies
-COLUMN_MASTER_PATH = "...\\COLUMN_MASTER.csv"
-MF_ISIN_CSV_PATH = "...\\MF_ISIN_MAPPING.csv"
-BENCHMARK_MAPPING_CSV_PATH = "...\\BENCHMARK_MAPPING.csv"
-BENCHMARK_MASTER_CSV_PATH = "...\\BENCHMARK_MASTER.csv"
-TAX_RATES_CSV_PATH = "...\\TAX_RATES.csv"
-OPENING_BALANCE_CSV_PATH = "...\\OPENING_BALANCE.csv"
-INFLATION_RATES_CSV_PATH = "...\\INFLATION_RATES.csv"
+[statement_patterns]
+stock_pl = "Stock PL Statements"
+mf_holdings = "Mutual Funds - Holdings"
+stock_orders = "Stock - Orders"
+mf_orders = "Mutual Funds - Orders"
+us_stock_transactions = ["IND Money (US Stocks)", "Transaction Reports"]
 
-# Statements
-STATEMENTS_FOLDER = "...\\Statements"
+[hash_policy]
+household_database = "CONTENT"
+statements = "NONE"
+reference_data = "CONTENT"
+
+[observability]
+logs_directory = "logs/runs"
+retain_last_n_runs = 12

@@ -28,7 +28,11 @@ from personal_finance_etl.infrastructure.observability import (
 )
 from personal_finance_etl.application.pipeline.lifecycle import RunLifecycleCoordinator
 from personal_finance_etl.config.financial_rules import FinancialRules
-from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.settings import (
+    DatabaseSettings,
+    ObservabilitySettings,
+    Settings,
+)
 from personal_finance_etl.contracts.observability import (
     DiagnosticSeverity,
     EventCode,
@@ -74,16 +78,20 @@ class _DummyStatusQueue:
 def test_fingerprint_config_determinism_and_privacy() -> None:
     """Verify fingerprint_config produces identical hashes for identical configurations."""
     cfg1 = Settings(
-        TARGET_DB_BASE_PATH="/secret/vault/db",
-        TARGET_DB_NAME="finance.duckdb",
-        DISABLE_FILE_DISCOVERER=True,
-        RETAIN_LAST_N_RUNS=10,
+        database=DatabaseSettings(
+            target_db_base_path="/secret/vault/db",
+            target_db_name="finance.duckdb",
+            disable_file_discoverer=True,
+        ),
+        observability=ObservabilitySettings(retain_last_n_runs=10),
     )
     cfg2 = Settings(
-        TARGET_DB_BASE_PATH="/secret/vault/db",
-        TARGET_DB_NAME="finance.duckdb",
-        DISABLE_FILE_DISCOVERER=True,
-        RETAIN_LAST_N_RUNS=10,
+        database=DatabaseSettings(
+            target_db_base_path="/secret/vault/db",
+            target_db_name="finance.duckdb",
+            disable_file_discoverer=True,
+        ),
+        observability=ObservabilitySettings(retain_last_n_runs=10),
     )
 
     res1: ConfigFingerprintDict = fingerprint_config(cfg1)
@@ -97,10 +105,12 @@ def test_fingerprint_config_determinism_and_privacy() -> None:
 
     # Changing a parameter must alter the fingerprint digest
     cfg3 = Settings(
-        TARGET_DB_BASE_PATH="/secret/vault/db",
-        TARGET_DB_NAME="finance.duckdb",
-        DISABLE_FILE_DISCOVERER=False,
-        RETAIN_LAST_N_RUNS=10,
+        database=DatabaseSettings(
+            target_db_base_path="/secret/vault/db",
+            target_db_name="finance.duckdb",
+            disable_file_discoverer=False,
+        ),
+        observability=ObservabilitySettings(retain_last_n_runs=10),
     )
     res3 = fingerprint_config(cfg3)
     assert res3["config_hash"] != res1["config_hash"]
@@ -137,10 +147,12 @@ def test_lifecycle_emits_system_config_fingerprint_with_real_values(tmp_path: Pa
     logs_dir.mkdir(parents=True, exist_ok=True)
 
     cfg = Settings(
-        TARGET_DB_BASE_PATH=str(db_base),
-        TARGET_DB_NAME="test_prov.duckdb",
-        RAW_DOCUMENT_STORE_NAME="test_prov_raw.duckdb",
-        LOGS_DIRECTORY=str(logs_dir),
+        database=DatabaseSettings(
+            target_db_base_path=str(db_base),
+            target_db_name="test_prov.duckdb",
+            raw_document_store_name="test_prov_raw.duckdb",
+        ),
+        observability=ObservabilitySettings(logs_directory=str(logs_dir)),
     )
 
     rules_path = Path("tests/financial_rules.toml")
@@ -150,7 +162,7 @@ def test_lifecycle_emits_system_config_fingerprint_with_real_values(tmp_path: Pa
     collecting_sink = _CollectingSink()
     emitter.register_sink(collecting_sink)
 
-    db_manager = DuckDBManager(cfg.TARGET_DB_BASE_PATH, cfg.TARGET_DB_NAME)
+    db_manager = DuckDBManager(cfg.database.target_db_base_path, cfg.database.target_db_name)
     status_queue = _DummyStatusQueue()
 
     coordinator = RunLifecycleCoordinator(

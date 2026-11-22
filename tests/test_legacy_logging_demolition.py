@@ -131,9 +131,9 @@ def test_worker_exit_fallback_never_duplicates_a_terminal_event() -> None:
 def test_lifecycle_coordinator_live_jsonl_production_and_archival(tmp_path: Path) -> None:
     """Verify RunLifecycleCoordinator attaches live JSONL sink, writes trace, and archives it."""
     cfg = Settings()
-    cfg.TARGET_DB_BASE_PATH = str(tmp_path)
-    cfg.RAW_DOCUMENT_STORE_NAME = "raw_store.db"
-    cfg.LOGS_DIRECTORY = "logs/runs"
+    cfg.database.target_db_base_path = str(tmp_path)
+    cfg.database.raw_document_store_name = "raw_store.db"
+    cfg.observability.logs_directory = "logs/runs"
 
     db_path = str(tmp_path / "test_warehouse.duckdb")
     db_mgr = DuckDBManager(db_path)
