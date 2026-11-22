@@ -100,11 +100,13 @@ BRONZE_CONTRACT_REGISTRY: list[BronzeDataContract] = [
 # Lightweight registry for Silver and Gold analytical layers
 DATA_CONTRACT_REGISTRY: list[DataContract] = [
     # --- Silver Dimensions ---
-    DataContract("df_d_calendar", "silver", "silver.d_Calendar", "Common", "Day", "CoreEngine", 10),
+    DataContract(
+        "df_d_calendar", "silver", "silver.dim_calendar", "Common", "Day", "CoreEngine", 10
+    ),
     DataContract(
         "df_d_income_category",
         "silver",
-        "silver.d_Income_Category",
+        "silver.dim_income_category",
         "Wealth",
         "Category",
         "CoreEngine",
@@ -113,7 +115,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_d_income_subcategory",
         "silver",
-        "silver.d_Income_Subcategory",
+        "silver.dim_income_subcategory",
         "Wealth",
         "Subcategory",
         "CoreEngine",
@@ -122,7 +124,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_d_expense_category",
         "silver",
-        "silver.d_Expense_Category",
+        "silver.dim_expense_category",
         "Wealth",
         "Category",
         "CoreEngine",
@@ -131,7 +133,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_d_expense_subcategory",
         "silver",
-        "silver.d_Expense_Subcategory",
+        "silver.dim_expense_subcategory",
         "Wealth",
         "Subcategory",
         "CoreEngine",
@@ -140,7 +142,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_d_asset_category",
         "silver",
-        "silver.d_Asset_Category",
+        "silver.dim_asset_category",
         "Wealth",
         "Category",
         "CoreEngine",
@@ -149,19 +151,19 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_d_asset_subcategory",
         "silver",
-        "silver.d_Asset_SubCategory",
+        "silver.dim_asset_subcategory",
         "Wealth",
         "Subcategory",
         "CoreEngine",
         70,
     ),
     DataContract(
-        "df_d_currency", "silver", "silver.d_Currency", "Common", "Currency", "CoreEngine", 80
+        "df_d_currency", "silver", "silver.dim_currency", "Common", "Currency", "CoreEngine", 80
     ),
     DataContract(
         "df_d_benchmark_master",
         "silver",
-        "silver.d_Investment_Benchmark_Master",
+        "silver.dim_benchmark_master",
         "Investments",
         "Benchmark",
         "CoreEngine",
@@ -170,7 +172,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_currency_fx_rates",
         "silver",
-        "silver.f_Currency_FX_Rates",
+        "silver.fact_currency_fx_rates",
         "Common",
         "Date-Currency",
         "CoreEngine",
@@ -188,7 +190,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_d_macro_parameters",
         "silver",
-        "silver.d_Macro_Parameters",
+        "silver.ref_financial_year_parameters",
         "Investments",
         "FinancialYear",
         "CoreEngine",
@@ -198,7 +200,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_income_transactions",
         "silver",
-        "silver.f_Income_Transactions",
+        "silver.fact_income_transactions",
         "Wealth",
         "Transaction",
         "CoreEngine",
@@ -207,7 +209,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_expense_transactions",
         "silver",
-        "silver.f_Expense_Transactions",
+        "silver.fact_expense_transactions",
         "Wealth",
         "Transaction",
         "CoreEngine",
@@ -216,7 +218,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_transfer_transactions",
         "silver",
-        "silver.f_Transfer_Transactions",
+        "silver.fact_transfer_transactions",
         "Wealth",
         "Transaction",
         "CoreEngine",
@@ -225,7 +227,7 @@ DATA_CONTRACT_REGISTRY: list[DataContract] = [
     DataContract(
         "df_f_opening_balances",
         "silver",
-        "silver.f_Opening_Balances",
+        "silver.fact_opening_balances",
         "Wealth",
         "Balance",
         "CoreEngine",
