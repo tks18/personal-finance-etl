@@ -142,7 +142,7 @@ class SilverLayer:
         if df.height == 0:
             return 0
 
-        if "d_" in table_name:
+        if any(prefix in table_name for prefix in ("d_", "dim_", "ref_")):
             df = self._sanitize_dimension_strings(df)
 
         if table_name == "silver.d_Investment_Master":

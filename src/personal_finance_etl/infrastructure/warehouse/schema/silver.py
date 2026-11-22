@@ -15,7 +15,7 @@ Does not own
 from __future__ import annotations
 
 SILVER_DDL = """
-CREATE TABLE IF NOT EXISTS silver.d_Calendar (
+CREATE TABLE IF NOT EXISTS silver.dim_calendar (
     -- Identifiers
     Date DATE PRIMARY KEY,
     -- Descriptors/Classifications
@@ -85,27 +85,21 @@ CREATE TABLE IF NOT EXISTS silver.d_Calendar (
     Is_Future_Date BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_Income_Category (
+CREATE TABLE IF NOT EXISTS silver.dim_income_category (
     -- Identifiers
     UID TEXT PRIMARY KEY,
     -- Descriptors/Classifications
     CATEGORY_NAME TEXT,
-    CATEGORY_NAME_SHORT TEXT,
-    ORDER_SEQUENCE BIGINT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    S_NO BIGINT,
-    MODIFY_DATE BIGINT
+    CATEGORY_NAME_SHORT TEXT
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
+CREATE TABLE IF NOT EXISTS silver.dim_income_subcategory (
     -- Identifiers
     UID TEXT PRIMARY KEY,
     CATEGORY_ID TEXT,
     -- Descriptors/Classifications
     CATEGORY_NAME TEXT,
     CATEGORY_GROUPS TEXT,
-    ORDER_SEQUENCE BIGINT,
     Is_Active_Income BOOLEAN,
     Is_Passive_Income BOOLEAN,
     Is_Dividend_Income BOOLEAN,
@@ -113,118 +107,77 @@ CREATE TABLE IF NOT EXISTS silver.d_Income_Subcategory (
     Is_Non_Cash_Income BOOLEAN,
     Is_Investment_Exclusion BOOLEAN,
     Is_Tax_Credits BOOLEAN,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    S_NO BIGINT,
-    MODIFY_DATE BIGINT,
     Tax_Income_Head TEXT,
     Tax_Sub_Head TEXT,
     Taxability TEXT,
     Tax_Method TEXT,
-    FOREIGN KEY (CATEGORY_ID) REFERENCES silver.d_Income_Category(UID)
+    FOREIGN KEY (CATEGORY_ID) REFERENCES silver.dim_income_category(UID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_Expense_Category (
+CREATE TABLE IF NOT EXISTS silver.dim_expense_category (
     -- Identifiers
     UID TEXT PRIMARY KEY,
     -- Descriptors/Classifications
-    CATEGORY_NAME TEXT,
-    ORDER_SEQUENCE BIGINT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    S_NO BIGINT,
-    MODIFY_DATE BIGINT
+    CATEGORY_NAME TEXT
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_Expense_Subcategory (
+CREATE TABLE IF NOT EXISTS silver.dim_expense_subcategory (
     -- Identifiers
     UID TEXT PRIMARY KEY,
     CATEGORY_ID TEXT,
     -- Descriptors/Classifications
     CATEGORY_NAME TEXT,
-    ORDER_SEQUENCE BIGINT,
     Is_Core_Expense BOOLEAN,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    S_NO BIGINT,
-    MODIFY_DATE BIGINT,
-    FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Expense_Category(UID)
+    FOREIGN KEY(CATEGORY_ID) REFERENCES silver.dim_expense_category(UID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_Asset_Category (
+CREATE TABLE IF NOT EXISTS silver.dim_asset_category (
     -- Identifiers
     UID TEXT PRIMARY KEY,
     -- Descriptors/Classifications
     ASSET_GROUP TEXT,
     TYPE BIGINT,
-    ORDER_SEQUENCE BIGINT,
     ledger_role TEXT,
     cashflow_activity_type TEXT,
     settlement_timing TEXT,
     Is_Digital_Asset BOOLEAN,
     is_cash_pool BOOLEAN,
-    is_non_cash_pnl BOOLEAN,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    DEVICE_ID BIGINT,
-    USE_TIME BIGINT
+    is_non_cash_pnl BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_Asset_Subcategory (
+CREATE TABLE IF NOT EXISTS silver.dim_asset_subcategory (
     -- Identifiers
     UID TEXT PRIMARY KEY,
     ASSET_GROUP_ID TEXT,
     CURRENCY_ID TEXT,
-    AUTOPAY_ASSET_ID TEXT,
     -- Descriptors/Classifications
     ASSET_NAME TEXT,
     ASSET_DESCRIPTION TEXT,
     NOTES TEXT,
-    ORDER_SEQUENCE BIGINT,
     ledger_role TEXT,
     cashflow_activity_type TEXT,
     settlement_timing TEXT,
-    TRANSFER_EXPENSE BIGINT,
-    CARD_AUTOPAY BIGINT,
-    CARD_STATEMENT_DATE BIGINT,
-    CARD_PAYMENT_DATE BIGINT,
     Is_Liquid BOOLEAN,
     Is_Illiquid BOOLEAN,
     Is_Digital_Asset BOOLEAN,
     is_cash_pool BOOLEAN,
     is_non_cash_pnl BOOLEAN,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    S_NO BIGINT,
-    ADDED_TIME BIGINT,
-    FOREIGN KEY(ASSET_GROUP_ID) REFERENCES silver.d_Asset_Category(UID)
+    FOREIGN KEY(ASSET_GROUP_ID) REFERENCES silver.dim_asset_category(UID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_Currency (
+CREATE TABLE IF NOT EXISTS silver.dim_currency (
     -- Identifiers
     UID TEXT PRIMARY KEY,
     -- Descriptors/Classifications
     CURRENCY_NAME TEXT,
     ISO TEXT,
-    MAIN_ISO TEXT,
     Target_Currency_Code TEXT,
     yF_Ticker TEXT,
     SYMBOL TEXT,
-    SYMBOL_POSITION TEXT,
-    ORDER_SEQUENCE BIGINT,
-    RATE DOUBLE,
-    DECIMAL_POINT BIGINT,
-    IS_MAIN_CURRENCY BIGINT,
-    IS_SHOW BIGINT,
-    Is_Active BOOLEAN,
-    INSERT_TYPE TEXT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    S_NO BIGINT,
-    MODIFY_DATE BIGINT
+    Is_Active BOOLEAN
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Currency_FX_Rates (
+CREATE TABLE IF NOT EXISTS silver.fact_currency_fx_rates (
     -- Identifiers
     Date DATE NOT NULL,
     Currency_ID TEXT NOT NULL,
@@ -242,11 +195,11 @@ CREATE TABLE IF NOT EXISTS silver.f_Currency_FX_Rates (
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
     First_Observation_Date DATE,
-    FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
-    FOREIGN KEY(Currency_ID) REFERENCES silver.d_Currency(UID)
+    FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date),
+    FOREIGN KEY(Currency_ID) REFERENCES silver.dim_currency(UID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Income_Transactions (
+CREATE TABLE IF NOT EXISTS silver.fact_income_transactions (
     -- Identifiers
     UID TEXT PRIMARY KEY,
     DATE DATE NOT NULL,
@@ -260,10 +213,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Income_Transactions (
     DESCRIPTION TEXT,
     PAID TEXT,
     TRANSACTION_TYPE BIGINT,
-    FEES_NOTES TEXT,
-    MARK TEXT,
-    TRANSFER_FEES TEXT,
-    CARDDIVIDMONTH BIGINT,
     Is_Active_Income BOOLEAN,
     Is_Dividend_Income BOOLEAN,
     Is_Interest_Income BOOLEAN,
@@ -274,18 +223,13 @@ CREATE TABLE IF NOT EXISTS silver.f_Income_Transactions (
     -- Local/FX Values
     LOCAL_AMOUNT DOUBLE,
     EXCH_RATE DOUBLE,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    S_NO BIGINT,
-    TIMESTAMP BIGINT,
-    UPDATED_TIME BIGINT,
-    FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Income_Subcategory(UID),
-    FOREIGN KEY(ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID),
-    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID),
-    FOREIGN KEY(DATE) REFERENCES silver.d_Calendar(Date)
+    FOREIGN KEY(CATEGORY_ID) REFERENCES silver.dim_income_subcategory(UID),
+    FOREIGN KEY(ASSET_ID) REFERENCES silver.dim_asset_subcategory(UID),
+    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID),
+    FOREIGN KEY(DATE) REFERENCES silver.dim_calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Expense_Transactions (
+CREATE TABLE IF NOT EXISTS silver.fact_expense_transactions (
     -- Identifiers
     UID TEXT PRIMARY KEY,
     DATE DATE NOT NULL,
@@ -299,10 +243,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Expense_Transactions (
     DESCRIPTION TEXT,
     PAID TEXT,
     TRANSACTION_TYPE BIGINT,
-    FEES_NOTES TEXT,
-    MARK TEXT,
-    TRANSFER_FEES TEXT,
-    CARDDIVIDMONTH BIGINT,
     Is_Core_Expense BOOLEAN,
     -- Position Values
     BASE_AMOUNT DOUBLE,
@@ -310,18 +250,13 @@ CREATE TABLE IF NOT EXISTS silver.f_Expense_Transactions (
     -- Local/FX Values
     LOCAL_AMOUNT DOUBLE,
     EXCH_RATE DOUBLE,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    S_NO BIGINT,
-    TIMESTAMP BIGINT,
-    UPDATED_TIME BIGINT,
-    FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Expense_Subcategory(UID),
-    FOREIGN KEY(ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID),
-    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID),
-    FOREIGN KEY(DATE) REFERENCES silver.d_Calendar(Date)
+    FOREIGN KEY(CATEGORY_ID) REFERENCES silver.dim_expense_subcategory(UID),
+    FOREIGN KEY(ASSET_ID) REFERENCES silver.dim_asset_subcategory(UID),
+    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID),
+    FOREIGN KEY(DATE) REFERENCES silver.dim_calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Transfer_Transactions (
+CREATE TABLE IF NOT EXISTS silver.fact_transfer_transactions (
     -- Identifiers
     UID TEXT PRIMARY KEY,
     DATE DATE NOT NULL,
@@ -337,10 +272,6 @@ CREATE TABLE IF NOT EXISTS silver.f_Transfer_Transactions (
     PAID TEXT,
     TRANSACTION_TYPE BIGINT,
     TRANSFER_TYPE TEXT,
-    FEES_NOTES TEXT,
-    MARK TEXT,
-    TRANSFER_FEES TEXT,
-    CARDDIVIDMONTH BIGINT,
     -- Position Values
     BASE_AMOUNT DOUBLE,
     AMOUNT_ACCOUNT DOUBLE,
@@ -348,54 +279,32 @@ CREATE TABLE IF NOT EXISTS silver.f_Transfer_Transactions (
     -- Local/FX Values
     LOCAL_AMOUNT DOUBLE,
     EXCH_RATE DOUBLE,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    S_NO BIGINT,
-    TIMESTAMP BIGINT,
-    UPDATED_TIME BIGINT,
-    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID),
-    FOREIGN KEY(ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID),
-    FOREIGN KEY(TO_ASSET_ID) REFERENCES silver.d_Asset_Subcategory(UID),
-    FOREIGN KEY(DATE) REFERENCES silver.d_Calendar(Date),
-    FOREIGN KEY(ADJUSTED_DATE_FOR_ANALYSIS) REFERENCES silver.d_Calendar(Date)
+    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID),
+    FOREIGN KEY(ASSET_ID) REFERENCES silver.dim_asset_subcategory(UID),
+    FOREIGN KEY(TO_ASSET_ID) REFERENCES silver.dim_asset_subcategory(UID),
+    FOREIGN KEY(DATE) REFERENCES silver.dim_calendar(Date),
+    FOREIGN KEY(ADJUSTED_DATE_FOR_ANALYSIS) REFERENCES silver.dim_calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS silver.f_Opening_Balances (
+CREATE TABLE IF NOT EXISTS silver.fact_opening_balances (
     -- Identifiers
-    Z_PK BIGINT PRIMARY KEY,
-    ZTXDATESTR DATE,
-    ZASSETUID TEXT,
-    ZCATEGORYUID TEXT,
-    ZCURRENCYUID TEXT,
-    ZTOASSETUID TEXT,
-    ZTXUIDFEE TEXT,
-    ZTXUIDTRANS TEXT,
-    ZUID TEXT,
-    -- Descriptors/Classifications
-    ZCONTENT TEXT,
-    ZDO_TYPE BIGINT,
-    -- Position Values
-    ZAMOUNT DOUBLE,
+    ZASSETUID TEXT PRIMARY KEY,
+    -- Local/FX Values
     ZAMOUNTACCOUNT DOUBLE,
-    ZAMOUNTSUB DOUBLE,
-    ZDATE DOUBLE,
+    -- Temporal
+    ZTXDATESTR DATE,
     ZUTIME BIGINT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    FOREIGN KEY(ZCURRENCYUID) REFERENCES silver.d_Currency(UID),
-    FOREIGN KEY(ZASSETUID) REFERENCES silver.d_Asset_Subcategory(UID),
-    FOREIGN KEY(ZTXDATESTR) REFERENCES silver.d_Calendar(Date)
+    FOREIGN KEY(ZASSETUID) REFERENCES silver.dim_asset_subcategory(UID),
+    FOREIGN KEY(ZTXDATESTR) REFERENCES silver.dim_calendar(Date)
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_Investment_Benchmark_Master (
+CREATE TABLE IF NOT EXISTS silver.dim_benchmark_master (
     -- Identifiers
     ID TEXT PRIMARY KEY,
     CURRENCY_ID TEXT,
     -- Descriptors/Classifications
     Benchmark_Name TEXT,
-    yF_Ticker TEXT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT
+    yF_Ticker TEXT
 );
 
 CREATE TABLE IF NOT EXISTS silver.d_Investment_Master (
@@ -419,12 +328,12 @@ CREATE TABLE IF NOT EXISTS silver.d_Investment_Master (
     -- Tax & Harvesting
     TAX_TYPE TEXT NOT NULL,
     TAX_SUBTYPE TEXT,
-    FOREIGN KEY(CATEGORY_ID) REFERENCES silver.d_Asset_Subcategory(UID),
-    FOREIGN KEY(BENCHMARK_ID) REFERENCES silver.d_Investment_Benchmark_Master(ID),
-    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)
+    FOREIGN KEY(CATEGORY_ID) REFERENCES silver.dim_asset_subcategory(UID),
+    FOREIGN KEY(BENCHMARK_ID) REFERENCES silver.dim_benchmark_master(ID),
+    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID)
 );
 
-CREATE TABLE IF NOT EXISTS silver.d_Macro_Parameters (
+CREATE TABLE IF NOT EXISTS silver.ref_financial_year_parameters (
     -- Identifiers
     FY TEXT PRIMARY KEY,
     FY_Start_Date DATE,
@@ -452,9 +361,7 @@ CREATE TABLE IF NOT EXISTS silver.d_Macro_Parameters (
     Estimated_Ordinary_Income_Tax_Rate DOUBLE,
     -- Descriptors/Classifications
     Remarks TEXT,
-    __file_name__ TEXT,
-    __folder_path__ TEXT,
-    FOREIGN KEY(FY_Start_Date) REFERENCES silver.d_Calendar(Date)
+    FOREIGN KEY(FY_Start_Date) REFERENCES silver.dim_calendar(Date)
 );
 
 CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
@@ -486,9 +393,9 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Market_Data (
     Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
-    FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
+    FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
-    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)
+    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID)
 );
 
 CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
@@ -509,9 +416,9 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Purchase_Data (
     FX_Rate DOUBLE,
     __file_name__ TEXT,
     __folder_path__ TEXT,
-    FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
+    FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
-    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)
+    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID)
 );
 
 CREATE TABLE IF NOT EXISTS silver.f_Investment_Sale_Data (
@@ -539,9 +446,9 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Sale_Data (
     Total_PnL DOUBLE,
     __file_name__ TEXT,
     __folder_path__ TEXT,
-    FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
+    FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date),
     FOREIGN KEY(ISIN) REFERENCES silver.d_Investment_Master(ISIN),
-    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.d_Currency(UID)
+    FOREIGN KEY(CURRENCY_ID) REFERENCES silver.dim_currency(UID)
 );
 
 CREATE TABLE IF NOT EXISTS silver.f_Investment_Benchmark_Data (
@@ -561,8 +468,8 @@ CREATE TABLE IF NOT EXISTS silver.f_Investment_Benchmark_Data (
     Requested_End DATE,
     Is_Closure_Gap BOOLEAN,
     Is_Imputed BOOLEAN,
-    FOREIGN KEY(Date) REFERENCES silver.d_Calendar(Date),
-    FOREIGN KEY(ID) REFERENCES silver.d_Investment_Benchmark_Master(ID)
+    FOREIGN KEY(Date) REFERENCES silver.dim_calendar(Date),
+    FOREIGN KEY(ID) REFERENCES silver.dim_benchmark_master(ID)
 );
 
 CREATE TABLE IF NOT EXISTS silver.f_Investment_Analytics_Lot (
