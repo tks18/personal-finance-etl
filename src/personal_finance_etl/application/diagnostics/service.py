@@ -36,6 +36,9 @@ from personal_finance_etl.application.ingestion.identity import (
 )
 from personal_finance_etl.application.normalization.compiler import NormalizationCompiler
 from personal_finance_etl.application.pipeline.planner import CapabilityPlanner
+from personal_finance_etl.application.pipeline.satisfiability import (
+    CanonicalSatisfiabilityPlanner,
+)
 from personal_finance_etl.application.pipeline.source_planner import (
     CompiledSourcePlan,
     DatasetPlan,
@@ -57,7 +60,10 @@ from personal_finance_etl.config.sources.selectors import (
     ExcelSelector,
     SqliteSelector,
 )
-from personal_finance_etl.contracts.canonical_plans import SourceBindingPlan
+from personal_finance_etl.contracts.canonical_plans import (
+    SourceBindingPlan,
+    UnsatisfiedCanonicalEvidenceError,
+)
 from personal_finance_etl.contracts.capabilities import CapabilityId
 from personal_finance_etl.contracts.datasets import DatasetId, DatasetOrigin
 from personal_finance_etl.contracts.diagnostics import (
@@ -70,9 +76,11 @@ from personal_finance_etl.contracts.diagnostics import (
     IdentityPreviewResult,
     MappingPreviewResult,
     PlanPreviewResult,
+    ProducerResolutionPreview,
     SourceCheckDetail,
     SourceCheckResult,
     SourceReachabilityStatus,
+    UnsatisfiedEvidencePreview,
 )
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
 from personal_finance_etl.contracts.sources import ProviderType
@@ -925,6 +933,50 @@ class DiagnosticService:
         requested = settings.capabilities.resolved_capabilities
         plan = CapabilityPlanner().create_plan(requested_capabilities=requested)
 
+        prod_plan_fingerprint: str | None = None
+        is_satisfiable: bool = True
+        producer_resolutions: list[ProducerResolutionPreview] = []
+        unsatisfied_evidence: list[UnsatisfiedEvidencePreview] = []
+
+        if os.path.exists(sources_path):
+            try:
+                source_config = SourceConfiguration.from_toml(sources_path)
+                sat_planner = CanonicalSatisfiabilityPlanner()
+                try:
+                    cprod_plan = sat_planner.plan(
+                        execution_plan=plan,
+                        source_config=source_config,
+                    )
+                    prod_plan_fingerprint = cprod_plan.plan_fingerprint
+                    is_satisfiable = True
+
+                    for dp in cprod_plan.dataset_plans:
+                        routes = tuple(f"{r.binding_id}:{r.route_id}" for r in dp.route_refs)
+                        producer_resolutions.append(
+                            ProducerResolutionPreview(
+                                dataset_id=dp.dataset_id,
+                                producer_kind=dp.producer_kind.value,
+                                assembly_mode=dp.assembly_mode.value if dp.assembly_mode else None,
+                                is_required=dp.is_required,
+                                is_enabled=dp.is_enabled,
+                                source_routes=routes,
+                                recipe_name=dp.recipe_name,
+                                provider_type=dp.provider_type.value if dp.provider_type else None,
+                                dependencies=dp.dependencies,
+                            )
+                        )
+                except UnsatisfiedCanonicalEvidenceError as ue:
+                    is_satisfiable = False
+                    unsatisfied_evidence.append(
+                        UnsatisfiedEvidencePreview(
+                            dataset_id=ue.dataset_id,
+                            required_by_capabilities=ue.required_by_capabilities,
+                            reason=str(ue),
+                        )
+                    )
+            except Exception:
+                pass
+
         return PlanPreviewResult(
             plan_fingerprint=plan.plan_fingerprint,
             requested_capabilities=plan.requested_capabilities,
@@ -935,6 +987,10 @@ class DiagnosticService:
             active_gold_datasets=plan.active_gold_datasets,
             required_external_enrichments=plan.required_external_enrichments,
             ordered_engine_stages=plan.ordered_engine_stages,
+            production_plan_fingerprint=prod_plan_fingerprint,
+            is_satisfiable=is_satisfiable,
+            producer_resolutions=tuple(producer_resolutions),
+            unsatisfied_evidence=tuple(unsatisfied_evidence),
         )
 
     def dry_run_admission(

@@ -121,6 +121,31 @@ class CanonicalRecipeRegistry:
         """
         return tuple(self._descriptors[k] for k in sorted(self._descriptors.keys()))
 
+    def list_recipes(self) -> tuple[CanonicalRecipeDescriptor, ...]:
+        """List all registered canonical derivation recipe descriptors in sorted order.
+
+        Returns
+        -------
+        tuple[CanonicalRecipeDescriptor, ...]
+            Sorted sequence of registered recipe descriptors.
+        """
+        return self.list_descriptors()
+
+    def get_recipe(self, recipe_name: str) -> CanonicalRecipeDescriptor | None:
+        """Retrieve the metadata descriptor for a registered recipe by name or ID.
+
+        Parameters
+        ----------
+        recipe_name : str
+            Canonical recipe name or identifier to inspect.
+
+        Returns
+        -------
+        CanonicalRecipeDescriptor | None
+            Matching recipe descriptor if registered, else None.
+        """
+        return self.get_descriptor(recipe_name)
+
     def execute_recipe(
         self,
         recipe_id: str,

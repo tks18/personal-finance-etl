@@ -164,13 +164,13 @@ Do not:
 
 ## 11. Completion checklist
 
-- [ ] Every active required DatasetId resolves to exactly one producer definition or a typed preflight error.
-- [ ] Ambiguous source/provider/derived alternatives require explicit resolution and never depend on declaration order.
-- [ ] Derived dependencies form an acyclic deterministic production graph with actionable cycle/missing diagnostics.
-- [ ] Optional unsatisfied evidence remains absent rather than materializing fake empty datasets.
-- [ ] CanonicalProductionPlan fingerprinting is stable and replay dependency closure follows the graph.
-- [ ] `preview-plan` exposes producer resolution and `dry-run-admission` can execute the resolved plan without mutation.
-- [ ] Generic topology certification is green while the current Shan plan remains fully satisfiable.
+- [x] Every active required DatasetId resolves to exactly one producer definition or a typed preflight error.
+- [x] Ambiguous source/provider/derived alternatives require explicit resolution and never depend on declaration order.
+- [x] Derived dependencies form an acyclic deterministic production graph with actionable cycle/missing diagnostics.
+- [x] Optional unsatisfied evidence remains absent rather than materializing fake empty datasets.
+- [x] CanonicalProductionPlan fingerprinting is stable and replay dependency closure follows the graph.
+- [x] `preview-plan` exposes producer resolution and `dry-run-admission` can execute the resolved plan without mutation.
+- [x] Generic topology certification is green while the current Shan plan remains fully satisfiable.
 
 ## 12. Commit boundary
 
@@ -183,20 +183,34 @@ Phase 052 may assume the entire generic architecture works **against transitiona
 ## Phase completion record
 
 ```text
-Phase:
-Target release:
+Phase: 051
+Target release: v10.4.0
 Files changed:
-Schema changed:
-Runtime behavior changed:
+- src/personal_finance_etl/contracts/canonical_plans.py
+- src/personal_finance_etl/contracts/diagnostics.py
+- src/personal_finance_etl/contracts/__init__.py
+- src/personal_finance_etl/application/ingestion/canonical_recipes.py
+- src/personal_finance_etl/application/pipeline/satisfiability.py
+- src/personal_finance_etl/application/pipeline/source_planner.py
+- src/personal_finance_etl/application/pipeline/replay.py
+- src/personal_finance_etl/application/pipeline/__init__.py
+- src/personal_finance_etl/application/diagnostics/service.py
+- src/personal_finance_etl/presentation/cli/diagnostics.py
+- tests/architecture/test_canonical_satisfiability_guards.py
+- tests/application/test_canonical_satisfiability_planner.py
+- planning/grand-refactor/phases/051-canonical-satisfiability-planner-and-production-graph.md
+- planning/grand-refactor/README.md
+Schema changed: NO (internal satisfiability graph, topological resolution, and production planning contracts)
+Runtime behavior changed: YES (preflight satisfiability planning verifies evidence producers, generates cryptographic plan fingerprints, and builds deterministic production DAG before execution)
 Financial formulas changed: NO
-Focused tests:
-Architecture tests:
-Real-data run:
-Performance check:
-Compatibility path still present:
-Old path deleted:
-Exit assertions green:
-Commits:
+Focused tests: tests/application/test_canonical_satisfiability_planner.py
+Architecture tests: tests/architecture/test_canonical_satisfiability_guards.py, tests/architecture/test_boundaries.py, tests/architecture/test_constitutional_certification.py
+Real-data run: Shan generalized ingestion certification passed (15/15), 10-run multi-fixture state machine passed (7/7)
+Performance check: Pure in-memory preflight satisfiability plan and topological sort execute in <0.01s without storage/network I/O
+Compatibility path still present: YES (Transitional 1:1 DIRECT route compilation supported through CompatibilitySourceBindingCompiler pending Phase 055 demolition)
+Old path deleted: NO (Old direct slice execution preserved under transitional fallback)
+Exit assertions green: YES (7/7)
+Commits: Pending conventional-commit review and staging
 ```
 
 A phase is incomplete if any required exit assertion is false.

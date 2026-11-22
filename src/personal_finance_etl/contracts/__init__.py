@@ -38,12 +38,18 @@ from personal_finance_etl.contracts.canonical_fields import (
     is_valid_canonical_field,
 )
 from personal_finance_etl.contracts.canonical_plans import (
+    AmbiguousCanonicalProducerError,
     CanonicalDatasetPlan,
     CanonicalFragment,
+    CanonicalProducerCandidate,
     CanonicalProducerKind,
     CanonicalProductionPlan,
+    CyclicCanonicalDependencyError,
+    InvalidExplicitProducerSelectionError,
+    SatisfiabilityPlanningError,
     SourceAssemblyMode,
     SourceBindingPlan,
+    UnsatisfiedCanonicalEvidenceError,
 )
 from personal_finance_etl.contracts.canonical_recipes import (
     CanonicalIntegrityError,
@@ -102,9 +108,11 @@ from personal_finance_etl.contracts.diagnostics import (
     MappingPreviewResult,
     PlanPreviewResult,
     PreflightCheckFailedError,
+    ProducerResolutionPreview,
     SourceCheckDetail,
     SourceCheckResult,
     SourceReachabilityStatus,
+    UnsatisfiedEvidencePreview,
 )
 from personal_finance_etl.contracts.event_transport import EventQueue, NullEventQueue
 from personal_finance_etl.contracts.execution_plan import ExecutionPlan
@@ -189,6 +197,7 @@ from personal_finance_etl.contracts.validation import (
 __all__ = [
     "ALL_SILVER_COLUMN_DISPOSITIONS",
     "AdmissionDryRunResult",
+    "AmbiguousCanonicalProducerError",
     "ArtifactMetadata",
     "BRONZE_DATASET_ORIGIN_MAP",
     "CANDIDATE_BRONZE_DATASETS",
@@ -200,6 +209,7 @@ __all__ = [
     "CanonicalDatasetPlan",
     "CanonicalFragment",
     "CanonicalIntegrityError",
+    "CanonicalProducerCandidate",
     "CanonicalProducerKind",
     "CanonicalProductionError",
     "CanonicalProductionPlan",
@@ -216,6 +226,7 @@ __all__ = [
     "CommitState",
     "ConfigValidationResult",
     "ConflictingDuplicateIdentityError",
+    "CyclicCanonicalDependencyError",
     "DataFrameValidator",
     "ContributionDescriptor",
     "ContributionScope",
@@ -252,6 +263,7 @@ __all__ = [
     "IdentityPreviewResult",
     "IdentityRequirement",
     "IncompatibleFragmentSchemaError",
+    "InvalidExplicitProducerSelectionError",
     "InvestmentAction",
     "EventQueue",
     "MappingPreviewResult",
@@ -266,6 +278,7 @@ __all__ = [
     "ObservabilitySink",
     "PlanPreviewResult",
     "PreflightCheckFailedError",
+    "ProducerResolutionPreview",
     "PROVIDER_GENERATED_DATASETS",
     "PresentationKind",
     "ProvenanceRef",
@@ -277,6 +290,7 @@ __all__ = [
     "RestoreResult",
     "SILVER_COLUMN_DISPOSITIONS",
     "SILVER_CONTRACT_SEMANTICS",
+    "SatisfiabilityPlanningError",
     "SilverColumnDisposition",
     "SilverContractSemantics",
     "SnapshotOutcome",
@@ -292,6 +306,8 @@ __all__ = [
     "TRANSITIONAL_DATASETS",
     "UndeclaredUnionRouteError",
     "UnresolvedRecipeError",
+    "UnsatisfiedCanonicalEvidenceError",
+    "UnsatisfiedEvidencePreview",
     "ValidationCheckFailure",
     "ValidationContext",
     "ValidationError",

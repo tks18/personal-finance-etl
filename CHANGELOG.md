@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [10.4.0](https://github.com/tks18/personal-finance-etl/compare/10.3.5...10.4.0) (2026-11-22)
+
+
+### Features 🔥
+
+* **contracts:** add satisfiability errors & plan models ([138da93](https://github.com/tks18/personal-finance-etl/commit/138da938cb0a27349eadf64796ca97af61fc00a7))
+* **diagnostics:** add satisfiability preview & replay closure ([2a0f05d](https://github.com/tks18/personal-finance-etl/commit/2a0f05d46e852112197b2efe18552f4270aa4887))
+* **pipeline:** add satisfiability planner & production graph ([6885531](https://github.com/tks18/personal-finance-etl/commit/6885531db01a2fad68f2ea37d60174428b94e587))
+
+
+### Docs 📃
+
+* **refactor:** complete phase 051 satisfiability planner record ([cdf90c9](https://github.com/tks18/personal-finance-etl/commit/cdf90c93a099fd3c3f4a8de0d732aec1dd8e80e6))
+
 ### [10.3.5](https://github.com/tks18/personal-finance-etl/compare/10.3.4...10.3.5) (2026-11-22)
 
 

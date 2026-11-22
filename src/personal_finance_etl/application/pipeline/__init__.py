@@ -19,6 +19,9 @@ from personal_finance_etl.application.pipeline.replay import (
     ReplayCoordinator,
     SourceConfigChangeClassifier,
 )
+from personal_finance_etl.application.pipeline.satisfiability import (
+    CanonicalSatisfiabilityPlanner,
+)
 from personal_finance_etl.application.pipeline.source_planner import (
     CompiledSourcePlan,
     DatasetPlan,
@@ -29,6 +32,7 @@ from personal_finance_etl.application.pipeline.source_planner import (
 from personal_finance_etl.application.pipeline.transformer import TransformationDAG
 
 __all__ = [
+    "CanonicalSatisfiabilityPlanner",
     "CompiledSourcePlan",
     "DatasetPlan",
     "ReplayCoordinator",

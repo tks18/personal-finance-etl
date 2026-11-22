@@ -20,6 +20,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from personal_finance_etl.application.pipeline.satisfiability import (
+    CanonicalSatisfiabilityPlanner,
+)
 from personal_finance_etl.config.settings import FileHashPolicy
 from personal_finance_etl.config.sources.change_detection import (
     ChangeDetectionPolicy,
@@ -32,7 +35,11 @@ from personal_finance_etl.config.sources.selectors import (
     DatasetSelector,
     MarketProviderSelector,
 )
-from personal_finance_etl.contracts.canonical_plans import SourceBindingPlan
+from personal_finance_etl.contracts.canonical_plans import (
+    CanonicalProductionPlan,
+    SatisfiabilityPlanningError,
+    SourceBindingPlan,
+)
 from personal_finance_etl.contracts.datasets import (
     BRONZE_DATASET_ORIGIN_MAP,
     DatasetId,
@@ -143,11 +150,14 @@ class CompiledSourcePlan:
         All compiled source binding plans in deterministic order.
     dataset_plans : tuple[DatasetPlan, ...], default ()
         Transitional compiled dataset plans in deterministic order.
+    canonical_production_plan : CanonicalProductionPlan | None, default None
+        Authoritative compiled canonical production plan.
     """
 
     source_plans: tuple[SourcePlan, ...]
     binding_plans: tuple[SourceBindingPlan, ...] = ()
     dataset_plans: tuple[DatasetPlan, ...] = ()
+    canonical_production_plan: CanonicalProductionPlan | None = None
 
     def get_binding_plan(self, binding_id: SourceBindingId | str) -> SourceBindingPlan | None:
         """Find a source binding plan by logical SourceBindingId.
@@ -475,8 +485,20 @@ class SourcePlanner:
             )
         )
 
+        # Compile authoritative CanonicalProductionPlan via CanonicalSatisfiabilityPlanner
+        sat_planner = CanonicalSatisfiabilityPlanner()
+        try:
+            prod_plan = sat_planner.plan(
+                execution_plan=self.execution_plan,
+                source_config=topology,
+                binding_plans=tuple(binding_plans_list),
+            )
+        except SatisfiabilityPlanningError as e:
+            raise SourcePlanningError(str(e)) from e
+
         return CompiledSourcePlan(
             source_plans=tuple(source_plans_list),
             binding_plans=tuple(binding_plans_list),
             dataset_plans=tuple(dataset_plans_list),
+            canonical_production_plan=prod_plan,
         )
