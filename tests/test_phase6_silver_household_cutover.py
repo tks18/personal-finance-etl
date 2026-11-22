@@ -154,17 +154,17 @@ def test_15_household_and_reference_tables_in_ddl_and_contracts() -> None:
 
 
 def test_9_investment_and_tax_tables_preserved_under_legacy_names() -> None:
-    """Assert the 9 investment/tax tables remain strictly legacy until Phase 007."""
+    """Assert the 9 investment/tax tables are cut over to canonical names in Phase 007."""
     ddl_tables = _extract_ddl_tables_and_columns()
     contract_tables = {c.physical_table for c in DATA_CONTRACT_REGISTRY if c.layer == "silver"}
 
-    for tbl in EXPECTED_9_LEGACY_INVESTMENT_TABLES:
-        assert tbl in ddl_tables, f"Legacy table {tbl} must be preserved in SILVER_DDL"
-        assert tbl in contract_tables, f"Legacy table {tbl} must be in DATA_CONTRACT_REGISTRY"
+    for tbl in FUTURE_INVESTMENT_NAMES_PHASE7:
+        assert tbl in ddl_tables, f"Canonical table {tbl} must be in SILVER_DDL"
+        assert tbl in contract_tables, f"Canonical table {tbl} must be in DATA_CONTRACT_REGISTRY"
 
-    for future_tbl in FUTURE_INVESTMENT_NAMES_PHASE7:
-        assert future_tbl not in ddl_tables, f"{future_tbl} must not exist before Phase 007"
-        assert future_tbl not in contract_tables, f"{future_tbl} must not exist in contracts before Phase 007"
+    for old_tbl in EXPECTED_9_LEGACY_INVESTMENT_TABLES:
+        assert old_tbl not in ddl_tables, f"{old_tbl} must not exist after Phase 007 cutover"
+        assert old_tbl not in contract_tables, f"{old_tbl} must not exist in contracts after Phase 007"
 
 
 def test_proven_dead_columns_absent_from_ddl() -> None:
@@ -208,11 +208,13 @@ def test_foreign_key_references_use_dimensional_names() -> None:
     assert "REFERENCES silver.dim_asset_category(UID)" in SILVER_DDL
     assert "REFERENCES silver.dim_asset_subcategory(UID)" in SILVER_DDL
     assert "REFERENCES silver.dim_benchmark_master(ID)" in SILVER_DDL
+    assert "REFERENCES silver.dim_instrument_master(ISIN)" in SILVER_DDL
 
     # Assert no foreign keys reference the old names
     assert "REFERENCES silver.d_Calendar" not in SILVER_DDL
     assert "REFERENCES silver.d_Currency" not in SILVER_DDL
     assert "REFERENCES silver.d_Income_Category" not in SILVER_DDL
+    assert "REFERENCES silver.d_Investment_Master" not in SILVER_DDL
     assert "REFERENCES silver.d_Income_Subcategory" not in SILVER_DDL
     assert "REFERENCES silver.d_Expense_Category" not in SILVER_DDL
     assert "REFERENCES silver.d_Expense_Subcategory" not in SILVER_DDL
