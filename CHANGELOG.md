@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [11.1.0](https://github.com/tks18/personal-finance-etl/compare/11.0.1...11.1.0) (2026-11-22)
+
+
+### Code Refactoring 🖌
+
+* **config:** implement strict v11 settings and statement patterns ([08c8e9a](https://github.com/tks18/personal-finance-etl/commit/08c8e9a8b9a62a489d0edb334eca8e29a8edf077))
+* **core:** migrate pipeline and infrastructure to typed settings ([f905500](https://github.com/tks18/personal-finance-etl/commit/f9055003ff1a4a776758bb57caa6ed83c6e687d5))
+
+
+### Tests 🧪
+
+* **config:** update fixtures and test suites to strict typed settings ([db712be](https://github.com/tks18/personal-finance-etl/commit/db712be4eb0e087f475560af6816fdaa8010182a))
+
 ### [11.0.1](https://github.com/tks18/personal-finance-etl/compare/11.0.0...11.0.1) (2026-11-22)
 
 
