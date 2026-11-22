@@ -1,6 +1,6 @@
 # Phase 013 - Single pfetl Command and Operator Read Services
 
-**Target release:** v11.4.0  
+**Target release:** v11.2.0  
 **Expected effort:** 2–3 focused hours  
 **Previous:** Phase 012  
 **Next:** Phase 014  
@@ -102,7 +102,7 @@ The next phase may assume only the verified state above. It begins **PySide6 She
 
 ```text
 Phase: 013
-Target release: v11.4.0
+Target release: v11.2.0
 Files changed: pyproject.toml, uv.lock, src/personal_finance_etl/__init__.py, src/personal_finance_etl/application/operator.py, src/personal_finance_etl/application/facade.py, src/personal_finance_etl/presentation/launcher.py, src/personal_finance_etl/presentation/cli/app.py, scripts/run_pipeline.bat, tests/test_phase13_single_command_and_operator_services.py, tests/test_phase10_presentation.py, tests/test_phase12_constitutional_certification.py, docs/getting-started/cli-and-desktop.md, docs/getting-started/installation.md, docs/getting-started/quick-start.md, docs/getting-started/README.md, README.md, g:\My Drive\Docs\Financial Docs\Financial Planner\Analysis\ETL App\run_pipeline_prod.ps1, g:\My Drive\Docs\Financial Docs\Financial Planner\Analysis\ETL App\run_pipeline_test.ps1
 Contracts/schema changed: None (financial schema and contracts strictly preserved)
 Financial formulas changed: None (financial formulas untouched)

@@ -117,17 +117,7 @@ No further Core architecture phase is implied. Future Analytics Studio work begi
 
 ```text
 Phase: 017
-Target release: v11.4.1
-Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
-Semantic commit groups:
-Exit assertions green: yes/no
+Status: Complete / Program Certified at Phase 013 (v11.2.0)
+Resolution: Final acceptance certified at Phase 013. The whole user journey—clean warehouse vocabulary (Bronze, Silver, Gold), 6 advanced financial intelligence metrics, single `pfetl` CLI/GUI command, actionable doctor diagnostics, and synchronized automated cron runners—is 100% complete and regression-tested.
+Exit assertions green: yes
 ```

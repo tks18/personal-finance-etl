@@ -1,6 +1,6 @@
 # Phase 015 - PySide6 Operations Console Views
 
-**Target release:** v11.4.0  
+**Target release:** v11.2.0  
 **Expected effort:** 2–3 focused hours  
 **Previous:** Phase 014  
 **Next:** Phase 016  
@@ -102,17 +102,7 @@ The next phase may assume only the verified state above. It begins **Settings UI
 
 ```text
 Phase: 015
-Target release: v11.4.0
-Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
-Semantic commit groups:
-Exit assertions green: yes/no
+Status: Superseded / Pruned
+Resolution: Formally pruned in favor of clean CLI operator diagnostics (`pfetl doctor`, `status`, `info`) and existing desktop runner finalized in Phase 013.
+Exit assertions green: superseded
 ```

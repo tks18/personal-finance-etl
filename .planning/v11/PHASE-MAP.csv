@@ -11,8 +11,8 @@ Phase,Title,Target release,Sprint,Previous,Next,Risk
 010,Gold Investment Vocabulary and Power BI Cutover,v11.2.0,2-3h,Phase 009,Phase 011,High
 011,Household and Wealth Intelligence Expansion,v11.3.0,2-3h,Phase 010,Phase 012,Medium-High
 012,Investment and Tax Intelligence Expansion,v11.3.0,2-3h,Phase 011,Phase 013,Medium-High
-013,Single pfetl Command and Operator Read Services,v11.4.0,2-3h,Phase 012,Phase 014,Medium
-014,"PySide6 Shell, Run Workflow and Observability Parity",v11.4.0,2-3h,Phase 013,Phase 015,Medium-High
-015,PySide6 Operations Console Views,v11.4.0,2-3h,Phase 014,Phase 016,Medium-High
-016,"Settings UI, Recovery UX and CustomTkinter Retirement",v11.4.0,2-3h,Phase 015,Phase 017,Medium-High
+013,Single pfetl Command and Operator Read Services,v11.2.0,2-3h,Phase 012,Phase 014,Medium
+014,"PySide6 Shell, Run Workflow and Observability Parity",v11.2.0,2-3h,Phase 013,Phase 015,Medium-High
+015,PySide6 Operations Console Views,v11.2.0,2-3h,Phase 014,Phase 016,Medium-High
+016,"Settings UI, Recovery UX and CustomTkinter Retirement",v11.2.0,2-3h,Phase 015,Phase 017,Medium-High
 017,Final Shan-First Acceptance and Analytics Studio Readiness,v11.4.1,2-3h,Phase 016,Program complete,High

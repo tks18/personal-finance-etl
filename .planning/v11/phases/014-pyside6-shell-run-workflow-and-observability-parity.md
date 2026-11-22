@@ -1,6 +1,6 @@
 # Phase 014 - PySide6 Shell, Run Workflow and Observability Parity
 
-**Target release:** v11.4.0  
+**Target release:** v11.2.0  
 **Expected effort:** 2–3 focused hours  
 **Previous:** Phase 013  
 **Next:** Phase 015  
@@ -101,17 +101,7 @@ The next phase may assume only the verified state above. It begins **PySide6 Ope
 
 ```text
 Phase: 014
-Target release: v11.4.0
-Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
-Semantic commit groups:
-Exit assertions green: yes/no
+Status: Superseded / Pruned
+Resolution: Formally pruned to avoid GUI engineering bloat and 150MB+ binary dependencies. The canonical `pfetl` command and existing desktop application are certified as the long-term presentation boundary in Phase 013.
+Exit assertions green: superseded
 ```

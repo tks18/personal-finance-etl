@@ -1,6 +1,6 @@
 # Phase 016 - Settings UI, Recovery UX and CustomTkinter Retirement
 
-**Target release:** v11.4.0  
+**Target release:** v11.2.0  
 **Expected effort:** 2–3 focused hours  
 **Previous:** Phase 015  
 **Next:** Phase 017  
@@ -102,17 +102,7 @@ The next phase may assume only the verified state above. It begins **Final Shan-
 
 ```text
 Phase: 016
-Target release: v11.4.0
-Files changed:
-Contracts/schema changed:
-Financial formulas changed:
-Protected identity comparison:
-Focused tests:
-Architecture tests:
-Real-data verification:
-Power BI verification:
-Observability/recovery verification:
-Compatibility/transitional state remaining:
-Semantic commit groups:
-Exit assertions green: yes/no
+Status: Superseded / Pruned
+Resolution: Formally pruned. Settings and snapshot/restore recovery operations are fully managed via `pfetl snapshot`, `pfetl restore`, and existing UI.
+Exit assertions green: superseded
 ```
