@@ -29,6 +29,10 @@ from pydantic import BaseModel, model_validator
 
 from personal_finance_etl.config.capabilities import CapabilitySelection
 from personal_finance_etl.config.settings import Settings
+from personal_finance_etl.config.sources.compiler import (
+    CompatibilitySourceBindingCompiler,
+    CompiledSourceBindingTopology,
+)
 from personal_finance_etl.config.sources.identity import (
     BronzeIdentityStrategy,
     CompositeIdentity,
@@ -284,6 +288,20 @@ class SourceConfiguration(BaseModel):
         """
         target = str(source_id)
         return tuple(ds for ds in self.datasets if str(ds.source_id) == target)
+
+    def compile_binding_topology(self) -> CompiledSourceBindingTopology:
+        """Compile legacy 1:1 dataset bindings into the decoupled source binding topology.
+
+        Removal Owner
+        -------------
+        Phase 055 (decommissioning legacy SourceDatasetConfig).
+
+        Returns
+        -------
+        CompiledSourceBindingTopology
+            Deterministic compiled topology container.
+        """
+        return CompatibilitySourceBindingCompiler.compile(self)
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> SourceConfiguration:

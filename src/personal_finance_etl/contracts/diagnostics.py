@@ -112,6 +112,7 @@ class ConfigValidationResult:
     settings_path: str
     rules_path: str
     sources_path: str
+    compiled_bindings_count: int = 0
 
     @property
     def errors(self) -> tuple[DiagnosticIssue, ...]:
@@ -243,6 +244,8 @@ class MappingPreviewResult:
     post_rename_rules: tuple[str, ...]
     expected_canonical_fields: tuple[str, ...]
     provenance_fields: tuple[str, ...]
+    source_binding_id: str | None = None
+    canonical_route_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

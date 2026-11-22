@@ -47,9 +47,23 @@ from personal_finance_etl.config.sources.change_detection import (
     SyncStrategy,
     resolve_change_detection_policy,
 )
+from personal_finance_etl.config.sources.compiler import (
+    DEFAULT_COMPATIBILITY_ROUTE_ID,
+    CompatibilitySourceBindingCompiler,
+    CompiledSourceBindingTopology,
+    derive_source_binding_id,
+)
 from personal_finance_etl.config.sources.fingerprint import (
     SourceConfigFingerprint,
+    canonicalize_canonical_production,
+    canonicalize_canonical_route,
+    canonicalize_compiled_topology,
+    canonicalize_source_binding,
     canonicalize_source_configuration,
+    compute_canonical_production_fingerprint,
+    compute_canonical_route_fingerprint,
+    compute_compiled_topology_fingerprint,
+    compute_source_binding_fingerprint,
     compute_source_config_fingerprint,
 )
 from personal_finance_etl.config.sources.identity import (
@@ -108,6 +122,7 @@ from personal_finance_etl.config.sources.validation import (
 
 __all__ = [
     "CURRENT_SOURCE_CONFIG_SCHEMA_VERSION",
+    "DEFAULT_COMPATIBILITY_ROUTE_ID",
     "SUPPORTED_SOURCE_CONFIG_SCHEMA_VERSIONS",
     "BronzeIdentityStrategy",
     "CanonicalDatasetProductionConfig",
@@ -117,6 +132,8 @@ __all__ = [
     "CastRule",
     "ChangeDetectionPolicy",
     "ColumnMapping",
+    "CompatibilitySourceBindingCompiler",
+    "CompiledSourceBindingTopology",
     "CompositeIdentity",
     "ConstantRule",
     "CsvSelector",
@@ -144,8 +161,17 @@ __all__ = [
     "SyncStrategy",
     "TopologyCoverageReport",
     "TrimRule",
+    "canonicalize_canonical_production",
+    "canonicalize_canonical_route",
+    "canonicalize_compiled_topology",
+    "canonicalize_source_binding",
     "canonicalize_source_configuration",
+    "compute_canonical_production_fingerprint",
+    "compute_canonical_route_fingerprint",
+    "compute_compiled_topology_fingerprint",
+    "compute_source_binding_fingerprint",
     "compute_source_config_fingerprint",
+    "derive_source_binding_id",
     "dict_to_mapping_list",
     "evaluate_bronze_topology_coverage",
     "get_shan_baseline_dataset_bindings",
