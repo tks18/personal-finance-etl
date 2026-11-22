@@ -44,35 +44,52 @@ def test_theme_constants() -> None:
 
 
 def test_argument_parser_subcommands() -> None:
-    """Verify dual-mode argument parsing for CLI and Desktop GUI."""
+    """Verify pfetl argument parsing for CLI subcommands and Desktop GUI."""
     parser = canonical_launcher.build_argument_parser()
     assert isinstance(parser, argparse.ArgumentParser)
+    assert parser.prog == "pfetl"
 
-    # CLI subcommand
-    cli_args = parser.parse_args(
-        ["cli", "--config", "config.toml", "--rules", "rules.toml", "--auto"]
+    # run subcommand
+    run_args = parser.parse_args(
+        ["run", "--config", "config.toml", "--rules", "rules.toml", "--auto"]
     )
-    assert cli_args.command == "cli"
-    assert cli_args.config == "config.toml"
-    assert cli_args.rules == "rules.toml"
-    assert cli_args.auto is True
-    assert cli_args.cron is False
-    assert cli_args.snapshot is False
+    assert run_args.command == "run"
+    assert run_args.config == "config.toml"
+    assert run_args.rules == "rules.toml"
+    assert run_args.auto is True
+    assert run_args.cron is False
 
-    # CLI snapshot mode
-    snap_args = parser.parse_args(["cli", "--snapshot"])
-    assert snap_args.command == "cli"
-    assert snap_args.snapshot is True
+    # status subcommand
+    status_args = parser.parse_args(["status", "--config", "config.toml"])
+    assert status_args.command == "status"
+    assert status_args.config == "config.toml"
 
-    # CLI restore mode
-    restore_args = parser.parse_args(["cli", "--restore", "backup.zip"])
-    assert restore_args.command == "cli"
-    assert restore_args.restore == "backup.zip"
+    # doctor subcommand
+    doctor_args = parser.parse_args(["doctor", "--config", "config.toml", "--rules", "rules.toml"])
+    assert doctor_args.command == "doctor"
+    assert doctor_args.config == "config.toml"
+    assert doctor_args.rules == "rules.toml"
 
-    # Tkinter subcommand
-    tk_args = parser.parse_args(["tkinter"])
-    assert tk_args.command == "tkinter"
+    # info subcommand
+    info_args = parser.parse_args(["info"])
+    assert info_args.command == "info"
 
-    # Default invocation
+    # snapshot subcommand
+    snap_args = parser.parse_args(["snapshot", "--config", "config.toml"])
+    assert snap_args.command == "snapshot"
+    assert snap_args.config == "config.toml"
+
+    # restore subcommand
+    restore_args = parser.parse_args(["restore", "backup.zip", "--config", "config.toml"])
+    assert restore_args.command == "restore"
+    assert restore_args.target == "backup.zip"
+    assert restore_args.config == "config.toml"
+
+    # GUI flag
+    gui_args = parser.parse_args(["--gui"])
+    assert gui_args.gui is True
+    assert gui_args.command is None
+
+    # Default naked invocation
     def_args = parser.parse_args([])
     assert def_args.command is None
