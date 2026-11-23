@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [12.0.0](https://github.com/tks18/personal-finance-etl/compare/11.3.8...12.0.0) (2026-11-23)
+
+
+### Docs 📃
+
+* **readme:** rewrite root documentation into concise platform reference ([e305db6](https://github.com/tks18/personal-finance-etl/commit/e305db6ab31c80dde9fa27a51e2889ee01832932))
+
+
+### Code Refactoring 🖌
+
+* **desktop:** modernize vocabulary in configuration tab ([dbcc2c9](https://github.com/tks18/personal-finance-etl/commit/dbcc2c9c70298d9dae6d669623b6847ce7c56ce1))
+
+
+### Tests 🧪
+
+* **diagnostics:** update system and logs test suite vocabulary ([442b6c1](https://github.com/tks18/personal-finance-etl/commit/442b6c12226b5924c2b7cc0ed33485cfcada4489))
+
+
+### Others 🔧
+
+* **plan:** retire completed final-hardening program directory ([377cedd](https://github.com/tks18/personal-finance-etl/commit/377cedda4518411d8ef206b21081fdad0ee0ca5c))
+
 ### [11.3.8](https://github.com/tks18/personal-finance-etl/compare/11.3.7...11.3.8) (2026-11-23)
 
 
