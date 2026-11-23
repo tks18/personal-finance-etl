@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "11.3.2"
+version = "11.3.3"
 description = "Local-first personal financial systems platform for investment accounting, reconciliation, tax evidence, wealth analytics, FIRE planning, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
@@ -65,6 +65,7 @@ dependencies = [
     "yfinance>=1.5.1",
     "uuid>=1.30",
     "filelock>=4.0.3",
+    "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]
