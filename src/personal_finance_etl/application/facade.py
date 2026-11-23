@@ -42,7 +42,10 @@ from personal_finance_etl.contracts.recovery import (
     SnapshotOutcome,
     SnapshotResult,
 )
-from personal_finance_etl.infrastructure.configuration.toml_store import TomlSettingsStore
+from personal_finance_etl.infrastructure.configuration.toml_store import (
+    TomlRulesStore,
+    TomlSettingsStore,
+)
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
 from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
 
@@ -78,6 +81,7 @@ class PersonalFinanceEngine:
         self.container = container
         self._prefs = PreferencesManager()
         self._toml_store = TomlSettingsStore()
+        self._rules_store = TomlRulesStore()
 
     # --- Configuration Management ---
 
@@ -134,6 +138,36 @@ class PersonalFinanceEngine:
     def validate_settings_model(self, settings: Settings) -> None:
         """Perform full validation on a Settings model, verifying path existence."""
         settings.validate_config()
+
+    def load_financial_rules_document(self, filepath: str) -> tuple[FinancialRules, TOMLDocument]:
+        """Load a financial rules TOML file into a FinancialRules instance and TOMLDocument AST."""
+        return self._rules_store.load_document(filepath)
+
+    def save_financial_rules_document(
+        self,
+        filepath: str,
+        rules: FinancialRules,
+        original_doc: TOMLDocument | None = None,
+    ) -> None:
+        """Atomically persist validated FinancialRules to disk and add to recent rules."""
+        self._rules_store.save_document(filepath, rules, original_doc=original_doc)
+        self.add_recent_rules(filepath)
+
+    def save_financial_rules_document_as(
+        self,
+        target_filepath: str,
+        rules: FinancialRules,
+        source_filepath: str | None = None,
+    ) -> None:
+        """Save rules to a new destination, optionally copying structure from source."""
+        original_doc: TOMLDocument | None = None
+        if source_filepath and os.path.isfile(source_filepath):
+            _, original_doc = self._rules_store.load_document(source_filepath)
+        self.save_financial_rules_document(target_filepath, rules, original_doc=original_doc)
+
+    def validate_financial_rules_model(self, rules: FinancialRules) -> None:
+        """Validate in-memory FinancialRules model integrity."""
+        FinancialRules.model_validate(rules.model_dump())
 
     # --- Operator Services ---
 
