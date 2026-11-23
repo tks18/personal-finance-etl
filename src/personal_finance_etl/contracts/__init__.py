@@ -51,6 +51,14 @@ from personal_finance_etl.contracts.observability import (
     ObservabilitySink,
     PresentationKind,
 )
+from personal_finance_etl.contracts.operator import (
+    ControlPlaneHealth,
+    ControlPlaneInspection,
+    OperatorInspector,
+    StorageInspection,
+    WarehouseHealth,
+    WarehouseInventory,
+)
 from personal_finance_etl.contracts.recovery import (
     RestoreOutcome,
     RestoreResult,
@@ -60,6 +68,8 @@ from personal_finance_etl.contracts.recovery import (
 
 __all__ = [
     "CommitState",
+    "ControlPlaneHealth",
+    "ControlPlaneInspection",
     "DiagnosticSeverity",
     "EngineDataTransport",
     "EngineExecutionResult",
@@ -83,11 +93,15 @@ __all__ = [
     "ObservabilityEvent",
     "ObservabilityEventDict",
     "ObservabilitySink",
+    "OperatorInspector",
     "PresentationKind",
     "RestoreOutcome",
     "RestoreResult",
     "SnapshotOutcome",
     "SnapshotResult",
+    "StorageInspection",
     "SyncSummaryRecord",
+    "WarehouseHealth",
+    "WarehouseInventory",
     "classify_failure_domain",
 ]
