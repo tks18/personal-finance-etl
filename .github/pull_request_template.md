@@ -59,7 +59,7 @@ If yes, explain the previous methodology, new methodology, why it is correct, an
 
 ## Documentation
 
-<!-- List /docs, Wiki, README, contract-reference, or release-note changes. -->
+<!-- List README, contract-reference, or release-note changes. -->
 
 ## Additional context
 

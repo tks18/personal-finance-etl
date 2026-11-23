@@ -1,9 +1,8 @@
 # pylint: skip-file
-# flake8: noqa
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 from scripts.create_pr import main as create_pr_main
 from scripts.create_releases import run_release_cli
@@ -216,6 +215,7 @@ def load_pypi_token(repo_dir: Path | None = None) -> str | None:
 def publish_pypi(repo_dir: Path | None = None) -> int:
     """Build distributions with uv build and publish them to PyPI using token from .env."""
     from rich.console import Console
+
     from scripts.create_pr import get_project_root
 
     console = Console()

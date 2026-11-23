@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # pylint: skip-file
-# flake8: noqa
 """Installer for Git pre-commit and pre-push quality hooks.
 
 Repository: personal-finance-etl

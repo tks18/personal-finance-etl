@@ -5,9 +5,6 @@
 # Linked Companion Configs:
 #   - Pylint: .pylintrc
 #   - Mypy: mypy.ini
-#   - Flake8: .flake8
-#   - Codacy: .codacy.yml
-#   - CodeRabbit: .coderabbit.yaml
 # ==============================================================================
 
 line-length = 100
