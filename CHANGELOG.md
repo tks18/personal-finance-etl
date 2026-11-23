@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [11.3.4](https://github.com/tks18/personal-finance-etl/compare/11.3.3...11.3.4) (2026-11-23)
+
+
+### Code Refactoring 🖌
+
+* **assets:** relocate desktop brand assets and update runtime paths ([06a2813](https://github.com/tks18/personal-finance-etl/commit/06a2813a10fd95314bcd94686653cc37755f00b7))
+
+
+### CI 🛠
+
+* **tooling:** remove deprecated linters and tool configurations ([bd6dd31](https://github.com/tks18/personal-finance-etl/commit/bd6dd319547ef8028f7cb9a5fa0f01993d2e651b))
+
+
+### Docs 📃
+
+* **demolition:** remove documentation corpus and clean dead references ([abfb449](https://github.com/tks18/personal-finance-etl/commit/abfb44934e06e761c14cb04af4b8e4d78259cfbb))
+
 ### [11.3.3](https://github.com/tks18/personal-finance-etl/compare/11.3.2...11.3.3) (2026-11-23)
 
 
