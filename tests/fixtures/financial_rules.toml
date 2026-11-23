@@ -38,6 +38,13 @@ category_ids = [
 ]
 sub_category_ids = []
 
+[income.grouping]
+salary_category_name = "Salary"
+allowance_name_pattern = "allowance"
+allowance_group_name = "Allowances"
+active_group_threshold = 0.50
+min_tail_frequency = 3
+
 # Core / Essential Expenses (Mandatory living costs, utilities, fixed obligations)
 [expense.core]
 category_ids = [
@@ -77,6 +84,17 @@ sub_category_ids = [
     "C8A7331A-3854-41D0-B688-7EA17AEAB761", # Misc - Other Essentials
     "2636aad7-b1a5-43c8-9fbe-6bb1efeb51a1", # Subscriptions - ICAI Fees
 ]
+
+[expense.analytics]
+short_window_months = 3
+medium_window_months = 6
+long_window_months = 12
+investment_group_patterns = ["invest", "saving"]
+fixed_group_patterns = ["fixed", "utilities", "rent", "insurance", "tax", "emi", "loan"]
+consistency_score_cap = 10.0
+creep_spend_multiplier = 1.15
+creep_frequency_multiplier = 1.10
+creep_spike_multiplier = 1.50
 
 # Asset Mappings
 [assets.illiquid]
@@ -119,6 +137,7 @@ financing_liabilities = [
     "5", # Loan
     "9"  # Overdrafts
 ]
+investing_analysis_offset_months = -1
 
 [assets.digital]
 category_ids = [
@@ -137,6 +156,7 @@ sub_category_ids = ["FFF20552-FCA9-4DE6-928C-F73C4E78CDB5"]
 # Portfolio Management & Rebalancing Rules
 [portfolio_management]
 rebalance_tolerance_pct_points = 5.0
+cost_basis_tolerance = 0.01
 
 # Budget Allocation Rules (40/20/30+10 rule)
 [budget.income_allocation]
@@ -228,6 +248,7 @@ min_deflation_floor = -0.02
 debt_mf_cutoff_date = "2023-04-01"
 harvest_wait_days_threshold = 90
 fallback_equity_ltcg_exemption = 125000.0
+ltcg_maturity_ladder_days = [30, 90, 180, 365]
 
 [assumptions.tax.ltcg_threshold_months]
 equity_listed = 12
@@ -241,6 +262,7 @@ sgb_mf = 24
 sgb_ = 12
 silver_mf = 24
 silver_ = 12
+default = 24
 
 [assumptions.tax.investment_exclusions]
 stcg_sub_cat_ids = [
