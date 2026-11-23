@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [11.3.3](https://github.com/tks18/personal-finance-etl/compare/11.3.2...11.3.3) (2026-11-23)
+
+
+### Build System 🏗
+
+* **deps:** add openpyxl test dependency ([78b5740](https://github.com/tks18/personal-finance-etl/commit/78b57408acc932398625e7221936ee5effcae16e))
+
+
+### Tests 🧪
+
+* **demolition:** remove legacy phase and certification test modules ([e991a88](https://github.com/tks18/personal-finance-etl/commit/e991a886d1b5cb1db957ebbb77dc0159903ddd15))
+* **fixtures:** add miniature deterministic test fixtures for testing ([7d5e125](https://github.com/tks18/personal-finance-etl/commit/7d5e125a35a587ede788478716f7d8c8cc70006a))
+* **golden:** establish 6-module production confidence test suite ([57bd058](https://github.com/tks18/personal-finance-etl/commit/57bd05810740913b6b80b28f926dd1726728362f))
+
 ### [11.3.2](https://github.com/tks18/personal-finance-etl/compare/11.3.1...11.3.2) (2026-11-23)
 
 
