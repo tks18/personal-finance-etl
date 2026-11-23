@@ -19,12 +19,15 @@ import queue
 from typing import cast
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
+from personal_finance_etl.application.operator import OperatorService
 from personal_finance_etl.application.pipeline.orchestrator import ETLOrchestrator
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.event_transport import EventQueue
 from personal_finance_etl.contracts.observability import ObservabilityEvent
+from personal_finance_etl.contracts.operator import OperatorInspector
 from personal_finance_etl.infrastructure.control_plane.facade import ControlPlane
+from personal_finance_etl.infrastructure.operator import LocalOperatorInspector
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
 from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
 from personal_finance_etl.infrastructure.warehouse.connection import DuckDBManager
@@ -106,6 +109,24 @@ class ServiceContainer:
         rules = self.create_rules(rules_path)
         active_queue: EventQueue = status_queue or cast(EventQueue, _NullEventQueue())
         return ETLOrchestrator(cfg, active_queue, rules)
+
+    def create_operator_inspector(self) -> OperatorInspector:
+        """Instantiate a LocalOperatorInspector for diagnostic and read-only inspection."""
+        return LocalOperatorInspector(preferences_manager=self._prefs)
+
+    def create_operator_service(
+        self,
+        config_path: str | None = None,
+        rules_path: str | None = None,
+        inspector: OperatorInspector | None = None,
+    ) -> OperatorService:
+        """Assemble an OperatorService wired with an OperatorInspector."""
+        active_inspector = inspector or self.create_operator_inspector()
+        return OperatorService(
+            config_path=config_path,
+            rules_path=rules_path,
+            inspector=active_inspector,
+        )
 
     def create_engine(self) -> PersonalFinanceEngine:
         """Assemble a PersonalFinanceEngine application façade bound to this container."""
