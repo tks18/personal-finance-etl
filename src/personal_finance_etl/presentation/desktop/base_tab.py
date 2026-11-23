@@ -9,13 +9,15 @@ Owns
 
 Does not own
 -------------
-- Specific ETL buttons or file selectors (owned by concrete tab implementations like UnifiedETLTab).
+- Specific ETL buttons or file selectors (owned by concrete tab implementations like RunTab).
 - Application orchestration logic or execution pipelines (owned by application.facade).
 """
 
 from __future__ import annotations
 
+import queue
 import time
+from collections.abc import Callable
 from tkinter import messagebox
 from typing import Final
 
@@ -66,6 +68,12 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
         self.save_target = ""
         self.save_type = ExportMode.CONSOLIDATED
         self._run_btn_text = "▶  Run"
+        self.on_status_listener: Callable[[ObservabilityEvent], None] | None = None
+        self.on_batch_status_listener: Callable[[list[ObservabilityEvent]], None] | None = None
+        self._event_queue: queue.Queue[tuple[ctk.CTkButton | None, ObservabilityEvent]] = (
+            queue.Queue()
+        )
+        self._drain_scheduled: bool = False
 
         # 1-column layout — header | log
         self.grid_columnconfigure(0, weight=1)
@@ -158,138 +166,193 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
         run_btn: ctk.CTkButton | None,
         status: ObservabilityEvent,
     ) -> None:
-        """Handle status updates from backend engine with thread-safe UI dispatch.
+        """Enqueue status update thread-safely and trigger batched main-thread processing."""
+        self._event_queue.put((run_btn, status))
+        if not self._drain_scheduled:
+            self._drain_scheduled = True
+            try:
+                self.after(20, self._drain_event_queue)
+            except Exception:
+                self._drain_event_queue()
 
-        Parameters
-        ----------
-        run_btn : ctk.CTkButton | None
-            Execution button to re-enable on termination, if provided.
-        status : ObservabilityEvent
-            Status payload to render.
-        """
-        self.after(0, lambda: self._process_status(run_btn, status))
-
-    def _process_status(
-        self,
-        run_btn: ctk.CTkButton | None,
-        status: ObservabilityEvent,
-    ) -> None:
-        """Process status message on the Tkinter event loop thread.
-
-        Parameters
-        ----------
-        run_btn : ctk.CTkButton | None
-            Execution trigger button.
-        status : ObservabilityEvent
-            Canonical observability event to process.
-        """
+    def _drain_event_queue(self) -> None:
+        """Drain queued events in high-performance batches on the main Tkinter thread."""
+        self._drain_scheduled = False
         if not self.winfo_exists():
             return
 
-        self._process_observability_event(run_btn, status)
+        batch: list[tuple[ctk.CTkButton | None, ObservabilityEvent]] = []
+        while len(batch) < 100:
+            try:
+                batch.append(self._event_queue.get_nowait())
+            except queue.Empty:
+                break
+
+        if batch:
+            self._process_event_batch(batch)
+
+        if not self._event_queue.empty():
+            self._drain_scheduled = True
+            try:
+                self.after(20, self._drain_event_queue)
+            except Exception:
+                self._drain_event_queue()
+
+    def _process_event_batch(
+        self,
+        batch: list[tuple[ctk.CTkButton | None, ObservabilityEvent]],
+    ) -> None:
+        """Process a batch of ObservabilityEvents atomically on the main Tkinter thread."""
+        raw_events = [evt for _, evt in batch]
+        if self.on_batch_status_listener is not None:
+            try:
+                self.on_batch_status_listener(raw_events)
+            except Exception:
+                pass
+        elif self.on_status_listener is not None:
+            for evt in raw_events:
+                try:
+                    self.on_status_listener(evt)
+                except Exception:
+                    pass
+
+        ts = time.strftime("%H:%M:%S")
+        lines_to_log: list[tuple[str, str]] = []
+        latest_progress: float | None = None
+        last_btn: ctk.CTkButton | None = None
+        failure_event: ObservabilityEvent | None = None
+        run_complete = False
+
+        for run_btn, event in batch:
+            if run_btn is not None:
+                last_btn = run_btn
+            if event.progress is not None:
+                latest_progress = float(event.progress)
+
+            formatted = _format_event_message(event, ts)
+            if formatted is not None:
+                lines_to_log.append(formatted)
+
+            if event.presentation_kind == PresentationKind.FAILURE:
+                failure_event = event
+
+            if event.progress == 1.0 or (
+                event.presentation_kind == PresentationKind.SUCCESS
+                and event.event_code == EventCode.SYSTEM_TEARDOWN
+            ):
+                run_complete = True
+
+        if latest_progress is not None:
+            self._set_progress(latest_progress)
+
+        if lines_to_log:
+            self.status_log.configure(state="normal")
+            tb = self.status_log._textbox
+            for text, tag in lines_to_log:
+                tb.insert("end", text, tag)
+            line_count = int(tb.index("end-1c").split(".", maxsplit=1)[0])
+            if line_count > 5000:
+                tb.delete("1.0", f"{line_count - 4500}.0")
+            self.status_log.see("end")
+            self.status_log.configure(state="disabled")
+
+        if (run_complete or failure_event is not None) and last_btn is not None:
+            last_btn.configure(state="normal", text=self._run_btn_text)
+
+        if failure_event is not None:
+            messagebox.showerror("Execution Failure", _build_failure_dialog_text(failure_event))
 
     def _process_observability_event(
         self,
         run_btn: ctk.CTkButton | None,
         event: ObservabilityEvent,
     ) -> None:
-        """Process canonical ObservabilityEvent on Tkinter event loop thread."""
-        if event.presentation_kind == PresentationKind.INTERNAL:
-            return
+        """Process a single event immediately for test and backwards compatibility."""
+        self._process_event_batch([(run_btn, event)])
 
-        if event.progress is not None:
-            self._set_progress(float(event.progress))
+    def _process_status(
+        self,
+        run_btn: ctk.CTkButton | None,
+        status: ObservabilityEvent,
+    ) -> None:
+        """Process status message on the Tkinter event loop thread."""
+        self._process_observability_event(run_btn, status)
 
-        # Pure progress updates without narrative prose should not log empty lines
-        if not event.message.strip():
-            return
 
-        # Suppress repetitive per-entity success/cache ticks from cluttering UI log
-        if event.event_code in (
-            EventCode.MARKET_TICKER_SUCCESS,
-            EventCode.MARKET_TICKER_CACHE_HIT,
-            EventCode.QUANT_ISIN_PROCESSED,
-        ) and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS):
-            return
+def _format_event_message(event: ObservabilityEvent, ts: str) -> tuple[str, str] | None:
+    """Format structured observability event into a narrative display line, or None if suppressed."""
+    if event.presentation_kind == PresentationKind.INTERNAL or not event.message.strip():
+        return None
 
-        tag = _DESKTOP_TAG_MAP.get(event.presentation_kind, "info")
-        prefix = _DESKTOP_PREFIX_MAP.get(event.presentation_kind, "•")
+    if event.event_code in (
+        EventCode.MARKET_TICKER_SUCCESS,
+        EventCode.MARKET_TICKER_CACHE_HIT,
+        EventCode.QUANT_ISIN_PROCESSED,
+    ) and event.presentation_kind in (PresentationKind.STEP, PresentationKind.SUCCESS):
+        return None
 
-        parts: list[str] = [f"{prefix} {event.message}"]
+    tag = _DESKTOP_TAG_MAP.get(event.presentation_kind, "info")
+    prefix = _DESKTOP_PREFIX_MAP.get(event.presentation_kind, "•")
 
-        # Only display entity badge when it is a meaningful domain entity (suppress redundant [Run: uuid])
-        if (
-            event.context.entity_type
-            and event.context.entity_id
-            and event.context.entity_type != "Run"
-        ):
-            parts.append(f"[{event.context.entity_type}: {event.context.entity_id}]")
-        elif (
-            event.context.entity_id
-            and not event.context.entity_type
-            and event.context.entity_id != event.context.run_id
-        ):
-            parts.append(f"[{event.context.entity_id}]")
+    parts: list[str] = [f"{prefix} {event.message}"]
+    if event.context.entity_type and event.context.entity_id and event.context.entity_type != "Run":
+        parts.append(f"[{event.context.entity_type}: {event.context.entity_id}]")
+    elif (
+        event.context.entity_id
+        and not event.context.entity_type
+        and event.context.entity_id != event.context.run_id
+    ):
+        parts.append(f"[{event.context.entity_id}]")
 
-        if event.context.rows is not None:
-            parts.append(f"({event.context.rows:,} items)")
+    if event.context.rows is not None:
+        parts.append(f"({event.context.rows:,} items)")
 
-        if event.context.cache_hit is True:
-            parts.append("(cached)")
+    if event.context.cache_hit is True:
+        parts.append("(cached)")
 
-        if event.context.duration_ms is not None:
-            if event.context.duration_ms >= 1000.0:
-                parts.append(f"({event.context.duration_ms / 1000.0:.2f}s)")
-            else:
-                parts.append(f"({event.context.duration_ms:.1f}ms)")
+    if event.context.duration_ms is not None:
+        dur_sec = event.context.duration_ms / 1000.0
+        dur_str = f"({dur_sec:.2f}s)" if dur_sec >= 1.0 else f"({event.context.duration_ms:.1f}ms)"
+        parts.append(dur_str)
 
-        # On failure, append actionable diagnostic hints inline into the log
-        if event.presentation_kind == PresentationKind.FAILURE and event.error is not None:
-            if event.error.remediation_hint:
-                parts.append(f"\n  ↳ Remediation: {event.error.remediation_hint}")
-            if event.error.context_variables:
-                ctx_summary = ", ".join(
-                    f"{k}={v}" for k, v in sorted(event.error.context_variables.items())
-                )
-                parts.append(f"\n  ↳ Context: [{ctx_summary}]")
+    if event.presentation_kind == PresentationKind.FAILURE and event.error is not None:
+        if event.error.remediation_hint:
+            parts.append(f"\n  ↳ Remediation: {event.error.remediation_hint}")
+        if event.error.context_variables:
+            ctx_summary = ", ".join(
+                f"{k}={v}" for k, v in sorted(event.error.context_variables.items())
+            )
+            parts.append(f"\n  ↳ Context: [{ctx_summary}]")
 
-        msg = " ".join(parts)
-        self._log(msg, tag)
+    msg = " ".join(parts)
+    return (f"[{ts}] {msg}\n", tag)
 
-        if event.presentation_kind == PresentationKind.FAILURE:
-            if run_btn is not None:
-                run_btn.configure(state="normal", text=self._run_btn_text)
 
-            dialog_lines: list[str] = []
-            if event.error is not None:
-                dialog_lines.append(f"Failure Domain: {event.error.failure_domain.value}")
-                dialog_lines.append(
-                    f"Error: {event.error.exception_type} - {event.error.exception_message}"
-                )
-                if event.error.failing_stage:
-                    dialog_lines.append(f"Stage: {event.error.failing_stage}")
-                if event.error.failing_entity:
-                    dialog_lines.append(f"Entity: {event.error.failing_entity}")
-                if event.error.remediation_hint:
-                    dialog_lines.append(f"\nRemediation: {event.error.remediation_hint}")
-                if event.error.context_variables:
-                    dialog_lines.append("\nDiagnostic State:")
-                    for ck, cv in sorted(event.error.context_variables.items()):
-                        dialog_lines.append(f"  • {ck}: {cv}")
-                dialog_lines.append("")
-                dialog_lines.append(f"Run ID: {event.context.run_id}")
-                dialog_lines.append("Inspect forensic log for complete trace and stack context.")
-                if event.error.retryable:
-                    dialog_lines.append("Status: Transient failure eligible for retry.")
-            else:
-                dialog_lines.append(event.message)
-                dialog_lines.append(f"Run ID: {event.context.run_id}")
+def _build_failure_dialog_text(event: ObservabilityEvent) -> str:
+    """Build dialog message string for an execution failure event."""
+    dialog_lines: list[str] = []
+    if event.error is not None:
+        dialog_lines.append(f"Failure Domain: {event.error.failure_domain.value}")
+        dialog_lines.append(
+            f"Error: {event.error.exception_type} - {event.error.exception_message}"
+        )
+        if event.error.failing_stage:
+            dialog_lines.append(f"Stage: {event.error.failing_stage}")
+        if event.error.failing_entity:
+            dialog_lines.append(f"Entity: {event.error.failing_entity}")
+        if event.error.remediation_hint:
+            dialog_lines.append(f"\nRemediation: {event.error.remediation_hint}")
+        if event.error.context_variables:
+            dialog_lines.append("\nDiagnostic State:")
+            for ck, cv in sorted(event.error.context_variables.items()):
+                dialog_lines.append(f"  • {ck}: {cv}")
+        dialog_lines.append("")
+        dialog_lines.append(f"Run ID: {event.context.run_id}")
+        dialog_lines.append("Inspect forensic log for complete trace and stack context.")
+        if event.error.retryable:
+            dialog_lines.append("Status: Transient failure eligible for retry.")
+    else:
+        dialog_lines.append(event.message)
+        dialog_lines.append(f"Run ID: {event.context.run_id}")
 
-            messagebox.showerror("Execution Failure", "\n".join(dialog_lines))
-
-        if event.progress == 1.0 or (
-            event.presentation_kind == PresentationKind.SUCCESS
-            and event.event_code == EventCode.SYSTEM_TEARDOWN
-        ):
-            if run_btn is not None:
-                run_btn.configure(state="normal", text=self._run_btn_text)
+    return "\n".join(dialog_lines)
