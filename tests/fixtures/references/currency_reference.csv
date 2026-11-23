@@ -1,0 +1,3 @@
+UID,Currency_Code,Target_Currency_Code,yF_Ticker,Currency_Name,Is_Active
+INR_INR,INR,INR,,Indian Rupee,FALSE
+INR_USD,USD,INR,USDINR=X,US Dollar,TRUE

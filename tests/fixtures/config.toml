@@ -1,0 +1,32 @@
+[database]
+target_db_base_path = "tests/outputs"
+target_db_name = "Personal_Finance_DB.duckdb"
+raw_document_store_name = "Raw_Documents.sqlite"
+disable_file_discoverer = false
+
+[sources]
+household_database = "D:/Python Projects/personal-finance-etl/tests/fixtures/household"
+statements_root = "D:/Python Projects/personal-finance-etl/tests/fixtures/statements"
+column_master = "D:/Python Projects/personal-finance-etl/tests/fixtures/references/column_master.csv"
+mutual_fund_instrument_mapping = "D:/Python Projects/personal-finance-etl/tests/fixtures/references/mutual_fund_instrument_mapping.csv"
+instrument_master = "D:/Python Projects/personal-finance-etl/tests/fixtures/references/instrument_master.csv"
+benchmark_master = "D:/Python Projects/personal-finance-etl/tests/fixtures/references/benchmark_master.csv"
+currency_reference = "D:/Python Projects/personal-finance-etl/tests/fixtures/references/currency_reference.csv"
+financial_year_parameters = "D:/Python Projects/personal-finance-etl/tests/fixtures/references/financial_year_parameters.csv"
+opening_balances = "D:/Python Projects/personal-finance-etl/tests/fixtures/references/opening_balances.csv"
+
+[statement_patterns]
+stock_pl = "Stock PL Statements"
+mf_holdings = "Mutual Funds - Holdings"
+stock_orders = "Stock - Orders"
+mf_orders = "Mutual Funds - Orders"
+us_stock_transactions = ["IND Money (US Stocks)", "Transaction Reports"]
+
+[hash_policy]
+household_database = "CONTENT"
+statements = "NONE"
+reference_data = "CONTENT"
+
+[observability]
+logs_directory = "logs/runs"
+retain_last_n_runs = 5

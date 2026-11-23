@@ -137,6 +137,7 @@ ui.lock
 .mypy_cache/
 .pytest_cache/
 tests/output/
+tests/outputs/
 tests/samples/output
 outputs/
 scratch/
