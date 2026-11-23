@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [11.3.2](https://github.com/tks18/personal-finance-etl/compare/11.3.1...11.3.2) (2026-11-23)
+
+
+### Docs 📃
+
+* add analytics-studio plan ([0f9e16c](https://github.com/tks18/personal-finance-etl/commit/0f9e16cd54f2172bcf6d267ae5c0bfe4616cba0a))
+* add final hardening plan ([0e5bf08](https://github.com/tks18/personal-finance-etl/commit/0e5bf08b20aa0a71cf41aa2da2ff3fb58342903f))
+* add project forge plan ([9f66381](https://github.com/tks18/personal-finance-etl/commit/9f66381bd0027ac2577805133ab4263043fbf9dc))
+
+
+### Code Refactoring 🖌
+
+* **application:** decouple OperatorService from infrastructure ([824bbdb](https://github.com/tks18/personal-finance-etl/commit/824bbdbab84a4e43c71351ba1b8ed5576d7c7e44))
+
+
+### Features 🔥
+
+* **bootstrap:** wire operator inspector and service in container ([0556031](https://github.com/tks18/personal-finance-etl/commit/05560319e96b2d67fb419fe0b6a80184da3766ee))
+* **contracts:** add OperatorInspector protocol and result types ([626a6d9](https://github.com/tks18/personal-finance-etl/commit/626a6d91a7dac30673fd6408090c94376e93ccd9))
+* **infrastructure:** implement LocalOperatorInspector ([10cc825](https://github.com/tks18/personal-finance-etl/commit/10cc825b3e95c2eaa9b0f5e4b73a40450b62b5ca))
+
+
+### Tests 🧪
+
+* **operator:** add boundary isolation and protocol tests ([a234c01](https://github.com/tks18/personal-finance-etl/commit/a234c011a50853a8d556df506ed33571a155e150))
+
 ### [11.3.1](https://github.com/tks18/personal-finance-etl/compare/11.3.0...11.3.1) (2026-11-22)
 
 
