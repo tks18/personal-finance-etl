@@ -23,12 +23,13 @@ from PIL import Image
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.infrastructure.filesystem.paths import resource_path
+from personal_finance_etl.presentation.desktop.financial_rules_tab import FinancialRulesTab
 from personal_finance_etl.presentation.desktop.run_tab import RunTab, UnifiedETLTab
 from personal_finance_etl.presentation.desktop.settings_tab import SettingsTab
 from personal_finance_etl.presentation.desktop.state import AppState
 from personal_finance_etl.presentation.desktop.theme import Color
 
-__all__ = ["DesktopApp", "RunTab", "SettingsTab", "UnifiedETLTab", "main"]
+__all__ = ["DesktopApp", "FinancialRulesTab", "RunTab", "SettingsTab", "UnifiedETLTab", "main"]
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -107,6 +108,7 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
         tabs_spec = [
             ("run", "▶  Pipeline Run"),
             ("settings", "⚙️  Configuration"),
+            ("rules", "📜  Financial Rules"),
         ]
 
         for tab_id, tab_label in tabs_spec:
@@ -159,6 +161,11 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
             engine=self.engine,
             app_state=self.app_state,
         )
+        self.financial_rules_tab = FinancialRulesTab(
+            self.content_container,
+            engine=self.engine,
+            app_state=self.app_state,
+        )
 
         # Display initial tab
         self.run_tab.grid(row=0, column=0, sticky="nsew")
@@ -188,12 +195,20 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
         # Switch views with guaranteed synchronization
         if tab_id == "run":
             self.settings_tab.grid_remove()
+            self.financial_rules_tab.grid_remove()
             self.run_tab.grid(row=0, column=0, sticky="nsew")
             self.run_tab.ensure_config_loaded(self.app_state.active_config_path)
         elif tab_id == "settings":
             self.run_tab.grid_remove()
+            self.financial_rules_tab.grid_remove()
             self.settings_tab.grid(row=0, column=0, sticky="nsew")
             self.settings_tab.ensure_config_loaded(self.app_state.active_config_path)
+        elif tab_id == "rules":
+            self.run_tab.grid_remove()
+            self.settings_tab.grid_remove()
+            self.financial_rules_tab.grid(row=0, column=0, sticky="nsew")
+            if self.app_state.active_rules_path:
+                self.financial_rules_tab.ensure_rules_loaded(self.app_state.active_rules_path)
 
 
 def main() -> None:
