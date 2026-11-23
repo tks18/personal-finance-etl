@@ -134,6 +134,67 @@ class StatementPatternsSettings(BaseModel):
     )
 
 
+class PerformanceSettings(BaseModel):
+    """Runtime parallelism and concurrency parameters."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    market_workers: int = Field(
+        default=8,
+        ge=1,
+        description="Number of parallel worker processes for market data extraction.",
+    )
+    isin_workers: int = Field(
+        default=4,
+        ge=1,
+        description="Maximum number of parallel worker processes for ISIN quant simulation.",
+    )
+    duckdb_threads: int = Field(
+        default=4,
+        ge=1,
+        description="Number of worker threads allocated to DuckDB analytical query processing.",
+    )
+
+
+class MarketDataSettings(BaseModel):
+    """Provider fetch windows, download retries, and price acceptance thresholds."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    fetch_buffer_days: int = Field(
+        default=15,
+        ge=0,
+        description="Calendar buffer days added to market data fetch start date to ensure overlap.",
+    )
+    max_download_attempts: int = Field(
+        default=3,
+        ge=1,
+        description="Maximum download attempts for Yahoo Finance market data with backoff.",
+    )
+    anomalous_drop_threshold: float = Field(
+        default=-0.50,
+        ge=-1.0,
+        le=0.0,
+        alias="benchmark_anomalous_drop_threshold",
+        description="Single-day benchmark decline threshold for anomaly warning (-0.50 default).",
+    )
+    fx_backward_fill_days: int = Field(
+        default=30,
+        ge=0,
+        description="Maximum backward calendar days to search for valid FX rates on holidays/weekends.",
+    )
+    benchmark_max_staleness_days: int = Field(
+        default=7,
+        ge=0,
+        description="Maximum calendar days a benchmark price quote can remain stale before rejection.",
+    )
+    us_price_max_staleness_days: int = Field(
+        default=7,
+        ge=0,
+        description="Maximum calendar days a US stock price quote can remain stale before rejection.",
+    )
+
+
 class ObservabilitySettings(BaseModel):
     """Forensic logging and observability parameters."""
 
@@ -141,6 +202,11 @@ class ObservabilitySettings(BaseModel):
 
     logs_directory: str = "logs/runs"
     retain_last_n_runs: int = 12
+    max_age_days: int | None = Field(
+        default=30,
+        ge=1,
+        description="Maximum age threshold in days before execution logs and traces are pruned.",
+    )
 
 
 def _flatten_settings_to_records(
@@ -184,6 +250,8 @@ class Settings(BaseModel):
     statement_patterns: StatementPatternsSettings = Field(default_factory=StatementPatternsSettings)
     hash_policy: SourceHashPolicy = Field(default_factory=SourceHashPolicy)
     observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
+    performance: PerformanceSettings = Field(default_factory=PerformanceSettings)
+    market_data: MarketDataSettings = Field(default_factory=MarketDataSettings)
 
     def resolve_logs_dir(self) -> Path:
         """Resolve the active logs directory path against target base path if relative.

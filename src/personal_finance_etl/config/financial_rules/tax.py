@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 TaxabilityType = Literal["taxable", "non_taxable", "review"]
 TaxMethodType = Literal["ordinary_rate", "capital_gains", "exempt", "review"]
@@ -303,6 +303,28 @@ class TaxAssumptions(BaseModel):
     fallback_equity_ltcg_exemption: float = Field(
         ..., description="Annual tax-free exemption limit for equity Long Term Capital Gains."
     )
+    ltcg_maturity_ladder_days: list[int] = Field(
+        default_factory=lambda: [30, 90, 180, 365],
+        description="Ascending calendar-day thresholds for LTCG maturity ladder projection buckets.",
+    )
+
+    @field_validator("ltcg_maturity_ladder_days")
+    @classmethod
+    def validate_maturity_ladder(cls, v: list[int]) -> list[int]:
+        """Validate ladder consists of exactly 4 positive, strictly ascending thresholds."""
+        if len(v) != 4:
+            raise ValueError(
+                f"ltcg_maturity_ladder_days must contain exactly 4 day thresholds, got {len(v)}"
+            )
+        for i, val in enumerate(v):
+            if val <= 0:
+                raise ValueError(f"Threshold at index {i} must be a positive integer, got {val!r}")
+            if i > 0 and val <= v[i - 1]:
+                raise ValueError(
+                    f"Thresholds must be strictly ascending: index {i} ({val}) <= index {i - 1} ({v[i - 1]})"
+                )
+        return v
+
     rates: TaxRates = Field(
         default_factory=lambda: TaxRates(
             equity_ltcg=0.125,
