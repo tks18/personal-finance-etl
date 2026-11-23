@@ -15,11 +15,14 @@ Does not own
 
 from __future__ import annotations
 
+import json
 import multiprocessing
 import os
 import threading
 from collections.abc import Callable
-from typing import Protocol
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Protocol, cast
 
 from tomlkit.toml_document import TOMLDocument
 
@@ -292,3 +295,112 @@ class PersonalFinanceEngine:
             rules = FinancialRules.from_toml(rules_path) if rules_path else None
             orchestrator = ETLOrchestrator(cfg, status_queue, rules)
         orchestrator.run()
+
+    # --- Forensic Observability and Logs ---
+
+    def get_logs_directory(self, config_path: str | None = None) -> Path:
+        """Resolve the active logs directory from configuration or default fallback."""
+        if config_path and os.path.exists(config_path):
+            try:
+                cfg = Settings.from_toml(config_path)
+                return cfg.resolve_logs_dir()
+            except Exception:
+                pass
+        return Path("outputs/logs")
+
+    def discover_log_files(self, config_path: str | None = None) -> list[Path]:
+        """Discover available JSONL forensic log files sorted newest first."""
+        log_dir = self.get_logs_directory(config_path)
+        if not log_dir.is_dir():
+            return []
+        try:
+            files = [p for p in log_dir.glob("*.jsonl") if p.is_file()]
+            runs_sub = log_dir / "runs"
+            if runs_sub.is_dir():
+                files.extend([p for p in runs_sub.glob("*.jsonl") if p.is_file()])
+            files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+            return files
+        except Exception:
+            return []
+
+    def read_jsonl_log(
+        self, file_path: Path | str, limit: int = 1000
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """Safely parse lines from a JSONL log file without throwing unhandled exceptions.
+
+        Returns
+        -------
+        tuple[list[dict[str, Any]], str | None]
+            List of parsed event dictionaries (including structured warning rows for malformed lines)
+            and the detected run_id if discovered.
+        """
+        p = Path(file_path)
+        if not p.is_file():
+            return [], None
+
+        events: list[dict[str, Any]] = []
+        detected_run_id: str | None = None
+
+        try:
+            with open(p, encoding="utf-8", errors="replace") as f:
+                for line_idx, line in enumerate(f):
+                    if len(events) >= limit:
+                        break
+                    stripped = line.strip()
+                    if not stripped:
+                        continue
+                    try:
+                        record: Any = json.loads(stripped)
+                        if isinstance(record, dict):
+                            record_dict = cast("dict[str, Any]", record)
+                            events.append(record_dict)
+                            if detected_run_id is None:
+                                raw_ctx = record_dict.get("context")
+                                if isinstance(raw_ctx, dict):
+                                    ctx_dict = cast("dict[str, object]", raw_ctx)
+                                    run_id_val = ctx_dict.get("run_id")
+                                    if run_id_val is not None:
+                                        detected_run_id = str(run_id_val)
+                        else:
+                            events.append(
+                                self._create_malformed_event_row(
+                                    stripped, line_idx, "Not a JSON object"
+                                )
+                            )
+                    except Exception as err:
+                        events.append(
+                            self._create_malformed_event_row(stripped, line_idx, str(err))
+                        )
+        except Exception as file_err:
+            events.append(
+                self._create_malformed_event_row(str(p), 0, f"Failed to read file: {file_err}")
+            )
+
+        return events, detected_run_id
+
+    @staticmethod
+    def _create_malformed_event_row(raw_text: str, line_no: int, error_msg: str) -> dict[str, Any]:
+        """Construct a structured warning row for truncated or malformed JSONL rows."""
+        return {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "event_code": "LOG_PARSE_WARNING",
+            "severity": "WARNING",
+            "presentation_kind": "WARNING",
+            "outcome": "FAILED",
+            "message": f"Malformed or truncated JSONL line {line_no + 1}: {raw_text[:120]}...",
+            "context": {
+                "stage": "OBSERVABILITY",
+                "component": "JsonlReader",
+                "operation": "parse_line",
+                "line_number": line_no + 1,
+            },
+            "error": {
+                "exception_type": "JSONDecodeError",
+                "exception_message": error_msg,
+                "failure_domain": "SYSTEM",
+                "traceback_summary": "",
+                "retryable": False,
+                "remediation_hint": "Check if write operation was abruptly interrupted.",
+                "context_variables": {"raw_snippet": raw_text[:200]},
+            },
+        }

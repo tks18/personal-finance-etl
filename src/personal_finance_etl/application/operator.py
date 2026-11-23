@@ -343,7 +343,8 @@ class OperatorService:
                 message=f"Cannot read control plane database: {health.error_message}",
                 remediation="Check database file locks or permissions on Raw_Documents.sqlite.",
             )
-        if "cp_runs" in health.table_names and "cp_artifacts" in health.table_names:
+        required_cp_tables = {"cp_runs", "cp_file_registry", "cp_artifact_run_events"}
+        if required_cp_tables.issubset(health.table_names):
             return DoctorCheckResult(
                 name="Control Plane (SQLite)",
                 status="PASS",

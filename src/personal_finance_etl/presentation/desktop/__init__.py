@@ -14,10 +14,13 @@ Does not own
 """
 
 from personal_finance_etl.presentation.desktop.app import (
+    ConfigurationTab,
     DesktopApp,
+    FinancialRulesTab,
+    LogsTab,
     RunTab,
     SettingsTab,
-    UnifiedETLTab,
+    SystemTab,
 )
 from personal_finance_etl.presentation.desktop.base_tab import BaseEngineTab
 from personal_finance_etl.presentation.desktop.config_editor import ConfigFieldEditor
@@ -35,10 +38,13 @@ __all__ = [
     "BaseEngineTab",
     "Color",
     "ConfigFieldEditor",
+    "ConfigurationTab",
     "DesktopApp",
     "ExportMode",
+    "FinancialRulesTab",
     "LogTag",
+    "LogsTab",
     "RunTab",
     "SettingsTab",
-    "UnifiedETLTab",
+    "SystemTab",
 ]
