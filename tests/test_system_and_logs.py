@@ -2,7 +2,7 @@
 # pyright: reportUnknownVariableType=false
 # pyright: reportPrivateUsage=false
 # pyright: reportUnknownArgumentType=false
-"""Automated tests for Phase 07: Forensic Logs and System UI.
+"""Automated tests for Forensic Logs and System Diagnostics UI.
 
 Owns
 ----
