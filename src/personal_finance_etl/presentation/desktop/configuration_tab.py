@@ -2,8 +2,8 @@
 
 Owns
 ----
-- ConfigurationTab: Dual-subtab container orchestrating SettingsTab (Phase 5)
-  and FinancialRulesTab (Phase 6) with clean segmented switching.
+- ConfigurationTab: Dual-subtab container orchestrating SettingsTab
+  and FinancialRulesTab with clean segmented switching.
 - Coordinating lazy loading and ensure_loaded() dispatching across sub-editors.
 
 Does not own
