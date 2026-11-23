@@ -21,6 +21,8 @@ import threading
 from collections.abc import Callable
 from typing import Protocol
 
+from tomlkit.toml_document import TOMLDocument
+
 from personal_finance_etl.application.operator import (
     DoctorReport,
     OperatorService,
@@ -40,6 +42,7 @@ from personal_finance_etl.contracts.recovery import (
     SnapshotOutcome,
     SnapshotResult,
 )
+from personal_finance_etl.infrastructure.configuration.toml_store import TomlSettingsStore
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
 from personal_finance_etl.infrastructure.recovery.backup import SystemBackupManager
 
@@ -74,6 +77,7 @@ class PersonalFinanceEngine:
     def __init__(self, container: ContainerProtocol | None = None) -> None:
         self.container = container
         self._prefs = PreferencesManager()
+        self._toml_store = TomlSettingsStore()
 
     # --- Configuration Management ---
 
@@ -100,6 +104,36 @@ class PersonalFinanceEngine:
             return True
         except Exception:
             return False
+
+    def load_settings_document(self, filepath: str) -> tuple[Settings, TOMLDocument]:
+        """Load a configuration TOML file into a Settings instance and TOMLDocument AST."""
+        return self._toml_store.load_document(filepath)
+
+    def save_settings_document(
+        self,
+        filepath: str,
+        settings: Settings,
+        original_doc: TOMLDocument | None = None,
+    ) -> None:
+        """Atomically persist validated Settings to disk and add to recent configs."""
+        self._toml_store.save_document(filepath, settings, original_doc=original_doc)
+        self.add_recent_config(filepath)
+
+    def save_settings_document_as(
+        self,
+        target_filepath: str,
+        settings: Settings,
+        source_filepath: str | None = None,
+    ) -> None:
+        """Save settings to a new destination, optionally copying structure from source."""
+        original_doc: TOMLDocument | None = None
+        if source_filepath and os.path.isfile(source_filepath):
+            _, original_doc = self._toml_store.load_document(source_filepath)
+        self.save_settings_document(target_filepath, settings, original_doc=original_doc)
+
+    def validate_settings_model(self, settings: Settings) -> None:
+        """Perform full validation on a Settings model, verifying path existence."""
+        settings.validate_config()
 
     # --- Operator Services ---
 
