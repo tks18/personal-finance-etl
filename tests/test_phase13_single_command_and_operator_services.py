@@ -13,6 +13,7 @@ Validates
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib.metadata
 import sys
 import tomllib
@@ -27,6 +28,9 @@ from personal_finance_etl.application.operator import (
     SystemInfo,
     SystemStatus,
 )
+from personal_finance_etl.bootstrap.container import ServiceContainer
+from personal_finance_etl.contracts.operator import OperatorInspector
+from personal_finance_etl.infrastructure.operator import LocalOperatorInspector
 from personal_finance_etl.presentation.launcher import build_argument_parser
 
 
@@ -166,3 +170,62 @@ def test_facade_operator_methods() -> None:
 
     doctor = engine.run_doctor()
     assert isinstance(doctor, DoctorReport)
+
+
+def test_operator_application_layer_decoupling() -> None:
+    """Assert application/operator.py has zero direct infrastructure imports."""
+    operator_file = (
+        Path(__file__).resolve().parent.parent
+        / "src"
+        / "personal_finance_etl"
+        / "application"
+        / "operator.py"
+    )
+    assert operator_file.exists(), f"File {operator_file} not found"
+
+    tree = ast.parse(operator_file.read_text(encoding="utf-8"))
+    imported_modules: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                imported_modules.append(alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported_modules.append(node.module)
+
+    forbidden_patterns = [
+        "sqlite3",
+        "duckdb",
+        "urllib",
+        "filelock",
+        "preferences",
+        "personal_finance_etl.infrastructure.warehouse.contracts",
+    ]
+
+    violations = [
+        mod
+        for mod in imported_modules
+        if any(forbid in mod for forbid in forbidden_patterns)
+    ]
+    assert (
+        not violations
+    ), f"application/operator.py must not import infrastructure packages: {violations}"
+
+
+def test_operator_inspector_protocol_and_container() -> None:
+    """Assert inspector satisfies protocol and container composition root wires correctly."""
+    inspector = LocalOperatorInspector()
+    assert isinstance(inspector, OperatorInspector)
+
+    container = ServiceContainer()
+    service = container.create_operator_service()
+    assert isinstance(service, OperatorService)
+
+    # Verify façade resolves through container
+    engine = container.create_engine()
+    status = engine.get_system_status()
+    assert isinstance(status, SystemStatus)
+    info = engine.get_system_info()
+    assert isinstance(info, SystemInfo)
+    doctor = engine.run_doctor()
+    assert isinstance(doctor, DoctorReport)
+

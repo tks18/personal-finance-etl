@@ -56,24 +56,15 @@ class ContainerProtocol(Protocol):
         status_queue: EventQueue | None = None,
         settings: Settings | None = None,
     ) -> ETLOrchestrator:
-        """Create and wire an ETLOrchestrator with configuration and observability.
+        """Create and wire an ETLOrchestrator with configuration and observability."""
+        ...
 
-        Parameters
-        ----------
-        config_path : str | None, optional
-            Path to application settings YAML.
-        rules_path : str | None, optional
-            Path to financial rules YAML.
-        status_queue : EventQueue | None, optional
-            Queue transport for canonical runtime events.
-        settings : Settings | None, optional
-            Pre-loaded settings instance.
-
-        Returns
-        -------
-        ETLOrchestrator
-            Wired execution orchestrator.
-        """
+    def create_operator_service(
+        self,
+        config_path: str | None = None,
+        rules_path: str | None = None,
+    ) -> OperatorService:
+        """Create and wire an OperatorService with an OperatorInspector."""
         ...
 
 
@@ -114,19 +105,30 @@ class PersonalFinanceEngine:
 
     def get_system_status(self, config_path: str | None = None) -> SystemStatus:
         """Query system status, lock state, and latest run telemetry read-only."""
-        op = OperatorService(config_path=config_path)
+        if self.container is not None and hasattr(self.container, "create_operator_service"):
+            op = self.container.create_operator_service(config_path=config_path)
+        else:
+            op = OperatorService(config_path=config_path)
         return op.get_status()
 
     def get_system_info(self, config_path: str | None = None) -> SystemInfo:
         """Inspect runtime environment, configured paths, and warehouse table inventory."""
-        op = OperatorService(config_path=config_path)
+        if self.container is not None and hasattr(self.container, "create_operator_service"):
+            op = self.container.create_operator_service(config_path=config_path)
+        else:
+            op = OperatorService(config_path=config_path)
         return op.get_info()
 
     def run_doctor(
         self, config_path: str | None = None, rules_path: str | None = None
     ) -> DoctorReport:
         """Execute actionable system health checks without raising unhandled exceptions."""
-        op = OperatorService(config_path=config_path, rules_path=rules_path)
+        if self.container is not None and hasattr(self.container, "create_operator_service"):
+            op = self.container.create_operator_service(
+                config_path=config_path, rules_path=rules_path
+            )
+        else:
+            op = OperatorService(config_path=config_path, rules_path=rules_path)
         return op.run_doctor()
 
     # --- Database Operations ---

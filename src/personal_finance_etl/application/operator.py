@@ -2,15 +2,16 @@
 
 Owns
 ----
-- OperatorService: strictly read-only inspection queries for CLI and GUI presentation.
+- OperatorService: strictly read-only inspection orchestration for CLI and GUI presentation.
 - SystemStatus: pipeline lock state, database file health, latest run and sync records.
 - SystemInfo: runtime environment, paths, package versions, and warehouse contract inventory.
 - DoctorReport / DoctorCheckResult: actionable health checks for configuration, stores, and providers.
 
 Does not own
 -------------
+- Concrete database queries or DDL (owned by infrastructure.warehouse/control_plane).
+- Direct network probing, filesystem operations, or lock inspection (owned by infrastructure.operator).
 - Pipeline orchestration or execution (owned by application.pipeline).
-- Database mutations, DDL, or lock acquisition (owned by infrastructure.warehouse/control_plane).
 - Human-facing terminal rendering or rich markup (owned by presentation.cli).
 """
 
@@ -18,19 +19,14 @@ from __future__ import annotations
 
 import importlib.metadata
 import os
-import sqlite3
 import sys
-import urllib.request
 from dataclasses import dataclass, field
 from typing import Literal
 
-import duckdb
-from filelock import FileLock
-
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
-from personal_finance_etl.infrastructure.preferences import PreferencesManager
-from personal_finance_etl.infrastructure.warehouse.contracts import DATA_CONTRACT_REGISTRY
+from personal_finance_etl.contracts.operator import OperatorInspector
+from personal_finance_etl.infrastructure.operator import LocalOperatorInspector
 
 __all__ = [
     "DoctorCheckResult",
@@ -109,47 +105,13 @@ class OperatorService:
         self,
         config_path: str | None = None,
         rules_path: str | None = None,
+        inspector: OperatorInspector | None = None,
     ) -> None:
-        self.config_path = config_path or self._discover_config_path()
-        self.rules_path = rules_path or self._discover_rules_path()
+        self._inspector = inspector or LocalOperatorInspector()
+        self.config_path = config_path or self._inspector.discover_config_path()
+        self.rules_path = rules_path or self._inspector.discover_rules_path()
         self._cached_settings: Settings | None = None
         self._cached_rules: FinancialRules | None = None
-
-    @classmethod
-    def _discover_config_path(cls) -> str | None:
-        """Discover configuration file path via preferences, environment, or default paths."""
-        prefs = PreferencesManager()
-        recent = prefs.get_recent_configs()
-        if recent and os.path.exists(recent[0]):
-            return recent[0]
-
-        env_path = os.getenv("PFETL_CONFIG")
-        if env_path and os.path.exists(env_path):
-            return env_path
-
-        candidates = ["config.toml", "config/config.toml", ".config/config.toml"]
-        for cand in candidates:
-            if os.path.exists(cand):
-                return cand
-        return None
-
-    @classmethod
-    def _discover_rules_path(cls) -> str | None:
-        """Discover financial rules file path via preferences, environment, or default paths."""
-        prefs = PreferencesManager()
-        recent = prefs.get_recent_rules()
-        if recent and os.path.exists(recent[0]):
-            return recent[0]
-
-        env_path = os.getenv("PFETL_RULES")
-        if env_path and os.path.exists(env_path):
-            return env_path
-
-        candidates = ["rules.toml", "config/rules.toml", ".config/rules.toml"]
-        for cand in candidates:
-            if os.path.exists(cand):
-                return cand
-        return None
 
     def _load_settings_safe(self) -> Settings | None:
         """Safely load settings without throwing unhandled exceptions."""
@@ -184,87 +146,25 @@ class OperatorService:
             settings.database.raw_document_store_name if settings else "Raw_Documents.sqlite"
         )
 
-        lock_path = os.path.join(base_path, "pipeline.lock")
-        is_locked = FileLock(lock_path).is_locked
-
-        duckdb_path = os.path.join(base_path, duckdb_name)
-        duckdb_exists = os.path.exists(duckdb_path)
-        duckdb_size = os.path.getsize(duckdb_path) if duckdb_exists else None
-
+        storage = self._inspector.inspect_storage(base_path, duckdb_name, sqlite_name)
         sqlite_path = os.path.join(base_path, sqlite_name)
-        sqlite_exists = os.path.exists(sqlite_path)
-        sqlite_size = os.path.getsize(sqlite_path) if sqlite_exists else None
-
-        latest_run_id: str | None = None
-        latest_run_status: str | None = None
-        latest_run_started: str | None = None
-        latest_run_finished: str | None = None
-        latest_sync_summary: dict[str, object] | None = None
-        stale_runs_count = 0
-        recovery_required_count = 0
-
-        if sqlite_exists:
-            try:
-                uri = f"file:{os.path.abspath(sqlite_path)}?mode=ro"
-                with sqlite3.connect(uri, uri=True, timeout=1.0) as conn:
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "SELECT run_id, status, started_at, finished_at FROM cp_runs ORDER BY started_at DESC LIMIT 1"
-                    )
-                    row = cursor.fetchone()
-                    if row:
-                        latest_run_id = str(row[0])
-                        latest_run_status = str(row[1]) if row[1] else None
-                        latest_run_started = str(row[2]) if row[2] else None
-                        latest_run_finished = str(row[3]) if row[3] else None
-
-                    cursor.execute(
-                        "SELECT COUNT(*) FROM cp_runs WHERE UPPER(status) IN ('STARTED', 'RUNNING', 'COMMITTING')"
-                    )
-                    stale_row = cursor.fetchone()
-                    stale_runs_count = int(stale_row[0]) if stale_row else 0
-
-                    cursor.execute(
-                        "SELECT COUNT(*) FROM cp_runs WHERE UPPER(status) = 'RECOVERY_REQUIRED'"
-                    )
-                    rec_row = cursor.fetchone()
-                    recovery_required_count = int(rec_row[0]) if rec_row else 0
-
-                    if latest_run_id:
-                        cursor.execute(
-                            "SELECT actionable_count, synced_count, healed_count, failed_count, deferred_count, sync_status, created_at "
-                            "FROM cp_sync_summaries WHERE run_id = ?",
-                            (latest_run_id,),
-                        )
-                        s_row = cursor.fetchone()
-                        if s_row:
-                            latest_sync_summary = {
-                                "actionable": s_row[0],
-                                "synced": s_row[1],
-                                "healed": s_row[2],
-                                "failed": s_row[3],
-                                "deferred": s_row[4],
-                                "status": s_row[5],
-                                "created_at": s_row[6],
-                            }
-            except Exception:
-                pass
+        cp = self._inspector.inspect_control_plane(sqlite_path)
 
         return SystemStatus(
-            is_locked=is_locked,
-            lock_path=lock_path,
+            is_locked=storage.is_locked,
+            lock_path=storage.lock_path,
             active_database_base_path=base_path if settings else None,
-            duckdb_exists=duckdb_exists,
-            duckdb_size_bytes=duckdb_size,
-            sqlite_exists=sqlite_exists,
-            sqlite_size_bytes=sqlite_size,
-            latest_run_id=latest_run_id,
-            latest_run_status=latest_run_status,
-            latest_run_started_at=latest_run_started,
-            latest_run_finished_at=latest_run_finished,
-            latest_sync_summary=latest_sync_summary,
-            stale_runs_count=stale_runs_count,
-            recovery_required_count=recovery_required_count,
+            duckdb_exists=storage.duckdb_exists,
+            duckdb_size_bytes=storage.duckdb_size_bytes,
+            sqlite_exists=storage.sqlite_exists,
+            sqlite_size_bytes=storage.sqlite_size_bytes,
+            latest_run_id=cp.latest_run_id,
+            latest_run_status=cp.latest_run_status,
+            latest_run_started_at=cp.latest_run_started_at,
+            latest_run_finished_at=cp.latest_run_finished_at,
+            latest_sync_summary=cp.latest_sync_summary,
+            stale_runs_count=cp.stale_runs_count,
+            recovery_required_count=cp.recovery_required_count,
         )
 
     def get_info(self) -> SystemInfo:
@@ -296,13 +196,7 @@ class OperatorService:
             else None
         )
 
-        bronze_count = sum(
-            1 for c in DATA_CONTRACT_REGISTRY if c.physical_table.startswith("bronze.")
-        )
-        silver_count = sum(
-            1 for c in DATA_CONTRACT_REGISTRY if c.physical_table.startswith("silver.")
-        )
-        gold_count = sum(1 for c in DATA_CONTRACT_REGISTRY if c.physical_table.startswith("gold."))
+        inventory = self._inspector.inspect_warehouse_inventory()
 
         return SystemInfo(
             version=ver,
@@ -315,10 +209,10 @@ class OperatorService:
             raw_store_path=sqlite_path,
             statements_root=statements_root,
             household_db_path=household_db,
-            bronze_tables_count=bronze_count,
-            silver_tables_count=silver_count,
-            gold_tables_count=gold_count,
-            warehouse_schemas=["bronze", "silver", "gold", "meta"],
+            bronze_tables_count=inventory.bronze_tables_count,
+            silver_tables_count=inventory.silver_tables_count,
+            gold_tables_count=inventory.gold_tables_count,
+            warehouse_schemas=inventory.warehouse_schemas,
         )
 
     @staticmethod
@@ -420,101 +314,91 @@ class OperatorService:
             remediation="Define sources.statements_root in your config.toml.",
         )
 
-    @staticmethod
-    def _check_control_plane(settings: Settings | None) -> DoctorCheckResult | None:
+    def _check_control_plane(self, settings: Settings | None) -> DoctorCheckResult | None:
         if not settings:
             return None
         base_dir = settings.database.target_db_base_path
         sqlite_file = os.path.join(base_dir, settings.database.raw_document_store_name)
-        if not os.path.exists(base_dir):
+        health = self._inspector.check_control_plane_health(
+            base_dir, settings.database.raw_document_store_name
+        )
+        if not health.base_dir_exists:
             return DoctorCheckResult(
                 name="Control Plane (SQLite)",
                 status="WARN",
                 message=f"Database target directory does not exist at '{base_dir}'.",
                 remediation="The directory will be created automatically on the next 'pfetl run'.",
             )
-        if not os.path.exists(sqlite_file):
+        if not health.file_exists:
             return DoctorCheckResult(
                 name="Control Plane (SQLite)",
                 status="WARN",
                 message=f"Raw document store not found at '{sqlite_file}'.",
                 remediation="Run 'pfetl run' to bootstrap and initialize the operational control plane.",
             )
-        try:
-            uri = f"file:{os.path.abspath(sqlite_file)}?mode=ro"
-            with sqlite3.connect(uri, uri=True, timeout=1.0) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-                tbls = {r[0] for r in cursor.fetchall()}
-                if "cp_runs" in tbls and "cp_artifacts" in tbls:
-                    return DoctorCheckResult(
-                        name="Control Plane (SQLite)",
-                        status="PASS",
-                        message=f"Control plane operational ({len(tbls)} tables).",
-                    )
-                return DoctorCheckResult(
-                    name="Control Plane (SQLite)",
-                    status="WARN",
-                    message="Control plane schema tables partially initialized.",
-                    remediation="Execute 'pfetl run' to converge schemas.",
-                )
-        except Exception as e:
+        if health.error_message:
             return DoctorCheckResult(
                 name="Control Plane (SQLite)",
                 status="FAIL",
-                message=f"Cannot read control plane database: {e}",
+                message=f"Cannot read control plane database: {health.error_message}",
                 remediation="Check database file locks or permissions on Raw_Documents.sqlite.",
             )
+        if "cp_runs" in health.table_names and "cp_artifacts" in health.table_names:
+            return DoctorCheckResult(
+                name="Control Plane (SQLite)",
+                status="PASS",
+                message=f"Control plane operational ({len(health.table_names)} tables).",
+            )
+        return DoctorCheckResult(
+            name="Control Plane (SQLite)",
+            status="WARN",
+            message="Control plane schema tables partially initialized.",
+            remediation="Execute 'pfetl run' to converge schemas.",
+        )
 
-    @staticmethod
-    def _check_warehouse(settings: Settings | None) -> DoctorCheckResult | None:
+    def _check_warehouse(self, settings: Settings | None) -> DoctorCheckResult | None:
         if not settings:
             return None
         base_dir = settings.database.target_db_base_path
         duckdb_file = os.path.join(base_dir, settings.database.target_db_name)
-        if not os.path.exists(duckdb_file):
+        health = self._inspector.check_warehouse_health(base_dir, settings.database.target_db_name)
+        if not health.file_exists:
             return DoctorCheckResult(
                 name="Analytical Warehouse (DuckDB)",
                 status="WARN",
                 message=f"DuckDB database not found at '{duckdb_file}'.",
                 remediation="Run 'pfetl run' to build the analytical lakehouse.",
             )
-        try:
-            duck_conn = duckdb.connect(duckdb_file, read_only=True)
-            schemas = {
-                r[0]
-                for r in duck_conn.execute(
-                    "SELECT schema_name FROM information_schema.schemata"
-                ).fetchall()
-            }
-            duck_conn.close()
-            if {"bronze", "silver", "gold"}.issubset(schemas):
-                return DoctorCheckResult(
-                    name="Analytical Warehouse (DuckDB)",
-                    status="PASS",
-                    message="DuckDB lakehouse online with bronze, silver, and gold schemas.",
-                )
-            return DoctorCheckResult(
-                name="Analytical Warehouse (DuckDB)",
-                status="WARN",
-                message=f"DuckDB present but missing schemas: {schemas}",
-                remediation="Run 'pfetl run' to generate missing schemas.",
-            )
-        except Exception as e:
+        if health.error_message:
             return DoctorCheckResult(
                 name="Analytical Warehouse (DuckDB)",
                 status="FAIL",
-                message=f"DuckDB read error: {e}",
+                message=f"DuckDB read error: {health.error_message}",
                 remediation="Ensure no exclusive write locks exist on Personal_Finance_DB.duckdb.",
             )
+        if {"bronze", "silver", "gold"}.issubset(health.schema_names):
+            return DoctorCheckResult(
+                name="Analytical Warehouse (DuckDB)",
+                status="PASS",
+                message="DuckDB lakehouse online with bronze, silver, and gold schemas.",
+            )
+        return DoctorCheckResult(
+            name="Analytical Warehouse (DuckDB)",
+            status="WARN",
+            message=f"DuckDB present but missing schemas: {health.schema_names}",
+            remediation="Run 'pfetl run' to generate missing schemas.",
+        )
 
-    @staticmethod
-    def _check_pipeline_lock(settings: Settings | None) -> DoctorCheckResult | None:
+    def _check_pipeline_lock(self, settings: Settings | None) -> DoctorCheckResult | None:
         if not settings:
             return None
         base_dir = settings.database.target_db_base_path
-        lock_path = os.path.join(base_dir, "pipeline.lock")
-        if os.path.exists(lock_path) and FileLock(lock_path).is_locked:
+        storage = self._inspector.inspect_storage(
+            base_dir,
+            settings.database.target_db_name,
+            settings.database.raw_document_store_name,
+        )
+        if storage.is_locked:
             return DoctorCheckResult(
                 name="Pipeline Lock",
                 status="WARN",
@@ -527,26 +411,19 @@ class OperatorService:
             message="Pipeline lock is free and available.",
         )
 
-    @staticmethod
-    def _check_market_data() -> DoctorCheckResult:
-        try:
-            req = urllib.request.Request(
-                "https://query1.finance.yahoo.com",
-                headers={"User-Agent": "pfetl-doctor/1.0"},
-            )
-            with urllib.request.urlopen(req, timeout=2.5):
-                return DoctorCheckResult(
-                    name="Market Data Provider",
-                    status="PASS",
-                    message="External market data provider (yfinance) is reachable.",
-                )
-        except Exception:
+    def _check_market_data(self) -> DoctorCheckResult:
+        if self._inspector.probe_market_data_provider():
             return DoctorCheckResult(
                 name="Market Data Provider",
-                status="WARN",
-                message="Market data provider is unreachable (offline mode).",
-                remediation="Check internet connection if market prices and FX rate syncs are needed.",
+                status="PASS",
+                message="External market data provider (yfinance) is reachable.",
             )
+        return DoctorCheckResult(
+            name="Market Data Provider",
+            status="WARN",
+            message="Market data provider is unreachable (offline mode).",
+            remediation="Check internet connection if market prices and FX rate syncs are needed.",
+        )
 
     def run_doctor(self) -> DoctorReport:
         """Execute actionable health checks, isolating failures without raw tracebacks."""
