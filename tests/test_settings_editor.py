@@ -137,18 +137,6 @@ def test_save_as_profile_creation(
     assert str(dest_file) in recents
 
 
-@pytest.fixture(scope="module")
-def tk_root() -> Any:
-    """Provide a single shared CTk root across tests in this module."""
-    root = ctk.CTk()
-    root.withdraw()
-    yield root
-    try:
-        root.destroy()
-    except Exception:
-        pass
-
-
 def test_config_field_editor_widgets(tk_root: Any) -> None:
     """Verify ConfigFieldEditor properly renders and casts values across schema types."""
     container = ctk.CTkFrame(tk_root)

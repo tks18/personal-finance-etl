@@ -20,6 +20,8 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
+# Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: customtkinter lacks py.typed marker and complete stubs
+import customtkinter as ctk  # type: ignore[import-untyped]
 import pandas as pd  # type: ignore[import-untyped]
 import pytest
 
@@ -138,3 +140,16 @@ def offline_market_stubs(monkeypatch: pytest.MonkeyPatch) -> None:
         "personal_finance_etl.infrastructure.providers.market.common.download_yfinance_history",
         mock_download_history,
     )
+
+
+@pytest.fixture(scope="session")
+def tk_root() -> Any:
+    """Provide a single shared CTk root across tests in a module."""
+    root = ctk.CTk()
+    root.withdraw()
+    yield root
+    try:
+        root.destroy()
+    except Exception:
+        pass
+

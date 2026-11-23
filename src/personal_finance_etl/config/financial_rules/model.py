@@ -108,8 +108,16 @@ class FinancialRules(BaseModel):
     portfolio_management: PortfolioManagementRules = Field(default_factory=PortfolioManagementRules)
 
     # Transactional rules
-    DEFAULT_CURRENCY_ID: str = "INR_INR"
-    MF_SCHEME_MAPPINGS: dict[str, str] = Field(default_factory=dict)
+    DEFAULT_CURRENCY_ID: str = Field(
+        default="INR_INR",
+        description="Primary reporting currency identifier (e.g. INR_INR).",
+        json_schema_extra={"ui_widget": "text", "placeholder": "e.g. INR_INR"},
+    )
+    MF_SCHEME_MAPPINGS: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mutual fund scheme normalization mappings (statement name -> master name).",
+        json_schema_extra={"ui_widget": "key_value_dict"},
+    )
 
     def validate_investment_exclusion_uids(
         self, df_subcategory: pl.DataFrame | pl.LazyFrame
