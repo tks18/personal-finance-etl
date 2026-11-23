@@ -29,6 +29,15 @@ from personal_finance_etl.config.settings import Settings
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
+@pytest.fixture(autouse=True)
+def isolate_user_preferences(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ensure tests run against an isolated temporary preferences store and never pollute user APPDATA."""
+    temp_appdata = tmp_path_factory.mktemp("test_appdata")
+    monkeypatch.setenv("APPDATA", str(temp_appdata))
+
+
 @pytest.fixture(scope="session")
 def fixtures_path() -> Path:
     """Return root path to test fixtures."""
