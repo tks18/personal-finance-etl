@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [11.3.8](https://github.com/tks18/personal-finance-etl/compare/11.3.7...11.3.8) (2026-11-23)
+
+
+### Features 🔥
+
+* **desktop:** add financial rules tab and structured matrix widgets ([23a15c5](https://github.com/tks18/personal-finance-etl/commit/23a15c503cadeb85fe61cfd8ffbbb62472d50ec6))
+* **infra:** add toml rules store and engine facade methods ([a4d625b](https://github.com/tks18/personal-finance-etl/commit/a4d625b9bdfeae07ce2d387c46e2d642cdd13f91))
+
+
+### Code Refactoring 🖌
+
+* **desktop:** add configuration_tab ([f461e67](https://github.com/tks18/personal-finance-etl/commit/f461e678e481d50a3b14f8a15eec45ebb79e47e6))
+* **desktop:** add logs_tab ([a288ce2](https://github.com/tks18/personal-finance-etl/commit/a288ce25846508c35542da346766933fbfe1825f))
+* **desktop:** add system_tab ([15b2970](https://github.com/tks18/personal-finance-etl/commit/15b29703f8c6aabdfe08099572911b60b00b9609))
+* **desktop:** update base_tab ([a09e4b5](https://github.com/tks18/personal-finance-etl/commit/a09e4b5f8e91a4240f4e870bedd37560dab9caf3))
+* **desktop:** update package exports ([f55c69b](https://github.com/tks18/personal-finance-etl/commit/f55c69ba9a605e403969e18f89d492755ee4a574))
+* **desktop:** update run_tab ([6e55ec1](https://github.com/tks18/personal-finance-etl/commit/6e55ec1ab77a3a6c66c1da28eb0b820400289cd6))
+* **operator.py:** update operator ([8f68e6c](https://github.com/tks18/personal-finance-etl/commit/8f68e6c50c0d9ed8f85482b617a9276073ebf771))
+* **operator:** update inspector ([2fbef86](https://github.com/tks18/personal-finance-etl/commit/2fbef86d0ff54f3f43dba54d6b1308d2f8c91b28))
+
+
+### Tests 🧪
+
+* **system_and_logs:** update test suite ([113e353](https://github.com/tks18/personal-finance-etl/commit/113e353e34882d096f9a10f2959604b600795da7))
+
 ### [11.3.7](https://github.com/tks18/personal-finance-etl/compare/11.3.6...11.3.7) (2026-11-23)
 
 
