@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [11.3.6](https://github.com/tks18/personal-finance-etl/compare/11.3.5...11.3.6) (2026-11-23)
+
+
+### Features 🔥
+
+* **config:** declare tomlkit dependency and enrich settings metadata ([7848252](https://github.com/tks18/personal-finance-etl/commit/78482528646e6679e70fcc7da8ff90517fc7825f))
+* **desktop:** add settings editor and tabview navigation ([a060733](https://github.com/tks18/personal-finance-etl/commit/a0607336a439ffca41bbc25d86714060c8d3b059))
+* **infra:** implement atomic toml store with comment preservation ([2b72f7b](https://github.com/tks18/personal-finance-etl/commit/2b72f7bfdc0ea3913a256c9235619a8a130583a3))
+
+
+### Tests 🧪
+
+* **desktop:** add settings editor tests ([affce22](https://github.com/tks18/personal-finance-etl/commit/affce226f3960445d3316b4a2dd3d22dfe096fd5))
+
 ### [11.3.5](https://github.com/tks18/personal-finance-etl/compare/11.3.4...11.3.5) (2026-11-23)
 
 

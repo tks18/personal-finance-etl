@@ -38,9 +38,33 @@ class SourceHashPolicy(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    household_database: HashPolicy = HashPolicy.CONTENT
-    statements: HashPolicy = HashPolicy.NONE
-    reference_data: HashPolicy = HashPolicy.CONTENT
+    household_database: HashPolicy = Field(
+        default=HashPolicy.CONTENT,
+        description="Hash policy for household SQLite database content verification.",
+        json_schema_extra={
+            "ui_widget": "choice",
+            "options": ["CONTENT", "NONE"],
+            "unit": "mode",
+        },
+    )
+    statements: HashPolicy = Field(
+        default=HashPolicy.NONE,
+        description="Hash policy for broker and fund statements content verification.",
+        json_schema_extra={
+            "ui_widget": "choice",
+            "options": ["CONTENT", "NONE"],
+            "unit": "mode",
+        },
+    )
+    reference_data: HashPolicy = Field(
+        default=HashPolicy.CONTENT,
+        description="Hash policy for reference Excel spreadsheets content verification.",
+        json_schema_extra={
+            "ui_widget": "choice",
+            "options": ["CONTENT", "NONE"],
+            "unit": "mode",
+        },
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -98,10 +122,40 @@ class DatabaseSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    target_db_base_path: str = ""
-    target_db_name: str = "Personal_Finance_DB.duckdb"
-    raw_document_store_name: str = "Personal_Finance_DB_Raw_Store.sqlite"
-    disable_file_discoverer: bool = False
+    target_db_base_path: str = Field(
+        default="",
+        description="Base directory path where DuckDB and SQLite databases are created and maintained.",
+        json_schema_extra={
+            "ui_widget": "directory",
+            "must_exist": True,
+            "placeholder": "Select warehouse database output directory...",
+        },
+    )
+    target_db_name: str = Field(
+        default="Personal_Finance_DB.duckdb",
+        description="Filename of the primary analytical DuckDB warehouse database.",
+        json_schema_extra={
+            "ui_widget": "text",
+            "placeholder": "Personal_Finance_DB.duckdb",
+        },
+    )
+    raw_document_store_name: str = Field(
+        default="Personal_Finance_DB_Raw_Store.sqlite",
+        description="Filename of the SQLite raw document and audit store database.",
+        json_schema_extra={
+            "ui_widget": "text",
+            "placeholder": "Personal_Finance_DB_Raw_Store.sqlite",
+        },
+    )
+    disable_file_discoverer: bool = Field(
+        default=False,
+        description="Skip scanning statements_root on disk and reuse existing raw document store cache.",
+        json_schema_extra={
+            "ui_widget": "switch",
+            "active_label": "Bypassed (Skip Scan)",
+            "inactive_label": "Active (Scan Disk)",
+        },
+    )
 
 
 class SourcesSettings(BaseModel):
@@ -109,15 +163,96 @@ class SourcesSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    household_database: str = ""
-    statements_root: str = ""
-    column_master: str = ""
-    mutual_fund_instrument_mapping: str = ""
-    instrument_master: str = ""
-    benchmark_master: str = ""
-    currency_reference: str = ""
-    financial_year_parameters: str = ""
-    opening_balances: str = ""
+    household_database: str = Field(
+        default="",
+        description="Path to household expense SQLite database directory or file.",
+        json_schema_extra={
+            "ui_widget": "directory",
+            "must_exist": True,
+            "kind": "sqlite",
+            "placeholder": "Select MoneyManager database folder or .sqlite file...",
+        },
+    )
+    statements_root: str = Field(
+        default="",
+        description="Root directory containing broker and fund statement subdirectories.",
+        json_schema_extra={
+            "ui_widget": "directory",
+            "must_exist": True,
+            "kind": "directory",
+            "placeholder": "Select statements root directory...",
+        },
+    )
+    column_master: str = Field(
+        default="",
+        description="Path to column mapping and canonical schema master Excel file.",
+        json_schema_extra={
+            "ui_widget": "file",
+            "must_exist": True,
+            "kind": "excel",
+            "placeholder": "Select column_master.xlsx...",
+        },
+    )
+    mutual_fund_instrument_mapping: str = Field(
+        default="",
+        description="Path to mutual fund instrument ISIN and scheme mapping Excel file.",
+        json_schema_extra={
+            "ui_widget": "file",
+            "must_exist": True,
+            "kind": "excel",
+            "placeholder": "Select mutual_fund_instrument_mapping.xlsx...",
+        },
+    )
+    instrument_master: str = Field(
+        default="",
+        description="Path to instrument taxonomy, asset class, and security master Excel file.",
+        json_schema_extra={
+            "ui_widget": "file",
+            "must_exist": True,
+            "kind": "excel",
+            "placeholder": "Select instrument_master.xlsx...",
+        },
+    )
+    benchmark_master: str = Field(
+        default="",
+        description="Path to benchmark ticker indices mapping Excel file.",
+        json_schema_extra={
+            "ui_widget": "file",
+            "must_exist": True,
+            "kind": "excel",
+            "placeholder": "Select benchmark_master.xlsx...",
+        },
+    )
+    currency_reference: str = Field(
+        default="",
+        description="Path to historical currency exchange rate reference Excel file.",
+        json_schema_extra={
+            "ui_widget": "file",
+            "must_exist": True,
+            "kind": "excel",
+            "placeholder": "Select currency_reference.xlsx...",
+        },
+    )
+    financial_year_parameters: str = Field(
+        default="",
+        description="Path to financial year parameters and inflation assumptions Excel file.",
+        json_schema_extra={
+            "ui_widget": "file",
+            "must_exist": True,
+            "kind": "excel",
+            "placeholder": "Select financial_year_parameters.xlsx...",
+        },
+    )
+    opening_balances: str = Field(
+        default="",
+        description="Path to portfolio opening balances and historic capital gains Excel file.",
+        json_schema_extra={
+            "ui_widget": "file",
+            "must_exist": True,
+            "kind": "excel",
+            "placeholder": "Select opening_balances.xlsx...",
+        },
+    )
 
 
 class StatementPatternsSettings(BaseModel):
@@ -125,12 +260,45 @@ class StatementPatternsSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    stock_pl: str = "Stock PL Statements"
-    mf_holdings: str = "Mutual Funds - Holdings"
-    stock_orders: str = "Stock - Orders"
-    mf_orders: str = "Mutual Funds - Orders"
+    stock_pl: str = Field(
+        default="Stock PL Statements",
+        description="Folder or file keyword pattern for stock P&L statements.",
+        json_schema_extra={
+            "ui_widget": "text",
+            "placeholder": "e.g. Stock PL Statements",
+        },
+    )
+    mf_holdings: str = Field(
+        default="Mutual Funds - Holdings",
+        description="Folder or file keyword pattern for mutual fund holdings statements.",
+        json_schema_extra={
+            "ui_widget": "text",
+            "placeholder": "e.g. Mutual Funds - Holdings",
+        },
+    )
+    stock_orders: str = Field(
+        default="Stock - Orders",
+        description="Folder or file keyword pattern for stock order transaction statements.",
+        json_schema_extra={
+            "ui_widget": "text",
+            "placeholder": "e.g. Stock - Orders",
+        },
+    )
+    mf_orders: str = Field(
+        default="Mutual Funds - Orders",
+        description="Folder or file keyword pattern for mutual fund order transaction statements.",
+        json_schema_extra={
+            "ui_widget": "text",
+            "placeholder": "e.g. Mutual Funds - Orders",
+        },
+    )
     us_stock_transactions: list[str] = Field(
-        default_factory=lambda: ["IND Money (US Stocks)", "Transaction Reports"]
+        default_factory=lambda: ["IND Money (US Stocks)", "Transaction Reports"],
+        description="Folder or file keyword patterns for US stock transaction statements.",
+        json_schema_extra={
+            "ui_widget": "list",
+            "placeholder": "Comma-separated patterns...",
+        },
     )
 
 
@@ -142,17 +310,41 @@ class PerformanceSettings(BaseModel):
     market_workers: int = Field(
         default=8,
         ge=1,
+        le=64,
         description="Number of parallel worker processes for market data extraction.",
+        json_schema_extra={
+            "ui_widget": "int",
+            "min": 1,
+            "max": 64,
+            "step": 1,
+            "unit": "workers",
+        },
     )
     isin_workers: int = Field(
         default=4,
         ge=1,
+        le=32,
         description="Maximum number of parallel worker processes for ISIN quant simulation.",
+        json_schema_extra={
+            "ui_widget": "int",
+            "min": 1,
+            "max": 32,
+            "step": 1,
+            "unit": "workers",
+        },
     )
     duckdb_threads: int = Field(
         default=4,
         ge=1,
+        le=64,
         description="Number of worker threads allocated to DuckDB analytical query processing.",
+        json_schema_extra={
+            "ui_widget": "int",
+            "min": 1,
+            "max": 64,
+            "step": 1,
+            "unit": "threads",
+        },
     )
 
 
@@ -164,12 +356,28 @@ class MarketDataSettings(BaseModel):
     fetch_buffer_days: int = Field(
         default=15,
         ge=0,
+        le=90,
         description="Calendar buffer days added to market data fetch start date to ensure overlap.",
+        json_schema_extra={
+            "ui_widget": "int",
+            "min": 0,
+            "max": 90,
+            "step": 1,
+            "unit": "days",
+        },
     )
     max_download_attempts: int = Field(
         default=3,
         ge=1,
+        le=10,
         description="Maximum download attempts for Yahoo Finance market data with backoff.",
+        json_schema_extra={
+            "ui_widget": "int",
+            "min": 1,
+            "max": 10,
+            "step": 1,
+            "unit": "retries",
+        },
     )
     anomalous_drop_threshold: float = Field(
         default=-0.50,
@@ -177,21 +385,52 @@ class MarketDataSettings(BaseModel):
         le=0.0,
         alias="benchmark_anomalous_drop_threshold",
         description="Single-day benchmark decline threshold for anomaly warning (-0.50 default).",
+        json_schema_extra={
+            "ui_widget": "float",
+            "min": -1.0,
+            "max": 0.0,
+            "step": 0.05,
+            "unit": "ratio",
+        },
     )
     fx_backward_fill_days: int = Field(
         default=30,
         ge=0,
+        le=365,
         description="Maximum backward calendar days to search for valid FX rates on holidays/weekends.",
+        json_schema_extra={
+            "ui_widget": "int",
+            "min": 0,
+            "max": 365,
+            "step": 5,
+            "unit": "days",
+        },
     )
     benchmark_max_staleness_days: int = Field(
         default=7,
         ge=0,
+        le=60,
         description="Maximum calendar days a benchmark price quote can remain stale before rejection.",
+        json_schema_extra={
+            "ui_widget": "int",
+            "min": 0,
+            "max": 60,
+            "step": 1,
+            "unit": "days",
+        },
     )
     us_price_max_staleness_days: int = Field(
         default=7,
         ge=0,
+        le=60,
         description="Maximum calendar days a US stock price quote can remain stale before rejection.",
+        json_schema_extra={
+            "ui_widget": "int",
+            "min": 0,
+            "max": 60,
+            "step": 1,
+            "unit": "days",
+        },
     )
 
 
@@ -200,12 +439,39 @@ class ObservabilitySettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    logs_directory: str = "logs/runs"
-    retain_last_n_runs: int = 12
+    logs_directory: str = Field(
+        default="logs/runs",
+        description="Subdirectory or absolute path for forensic execution logs and traces.",
+        json_schema_extra={
+            "ui_widget": "text",
+            "placeholder": "logs/runs",
+        },
+    )
+    retain_last_n_runs: int = Field(
+        default=12,
+        ge=1,
+        le=100,
+        description="Maximum number of historical pipeline runs to retain logs for before pruning.",
+        json_schema_extra={
+            "ui_widget": "int",
+            "min": 1,
+            "max": 100,
+            "step": 1,
+            "unit": "runs",
+        },
+    )
     max_age_days: int | None = Field(
         default=30,
         ge=1,
+        le=365,
         description="Maximum age threshold in days before execution logs and traces are pruned.",
+        json_schema_extra={
+            "ui_widget": "int",
+            "min": 1,
+            "max": 365,
+            "step": 5,
+            "unit": "days",
+        },
     )
 
 
