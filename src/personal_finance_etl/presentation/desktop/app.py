@@ -22,14 +22,27 @@ import customtkinter as ctk  # type: ignore[import-untyped]
 from PIL import Image
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
+from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.infrastructure.filesystem.paths import resource_path
+from personal_finance_etl.presentation.desktop.configuration_tab import ConfigurationTab
 from personal_finance_etl.presentation.desktop.financial_rules_tab import FinancialRulesTab
-from personal_finance_etl.presentation.desktop.run_tab import RunTab, UnifiedETLTab
+from personal_finance_etl.presentation.desktop.logs_tab import LogsTab
+from personal_finance_etl.presentation.desktop.run_tab import RunTab
 from personal_finance_etl.presentation.desktop.settings_tab import SettingsTab
 from personal_finance_etl.presentation.desktop.state import AppState
+from personal_finance_etl.presentation.desktop.system_tab import SystemTab
 from personal_finance_etl.presentation.desktop.theme import Color
 
-__all__ = ["DesktopApp", "FinancialRulesTab", "RunTab", "SettingsTab", "UnifiedETLTab", "main"]
+__all__ = [
+    "ConfigurationTab",
+    "DesktopApp",
+    "FinancialRulesTab",
+    "LogsTab",
+    "RunTab",
+    "SettingsTab",
+    "SystemTab",
+    "main",
+]
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -107,8 +120,9 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
 
         tabs_spec = [
             ("run", "▶  Pipeline Run"),
-            ("settings", "⚙️  Configuration"),
-            ("rules", "📜  Financial Rules"),
+            ("config", "⚙️  Configuration"),
+            ("logs", "📋  Forensic Logs"),
+            ("system", "🩺  System & Health"),
         ]
 
         for tab_id, tab_label in tabs_spec:
@@ -145,7 +159,7 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
         divider.grid(row=0, column=0, sticky="sew")
 
     def _build_content_views(self) -> None:
-        """Instantiate tab frames within the content container."""
+        """Instantiate initial RunTab and initialize lazy container references."""
         self.content_container = ctk.CTkFrame(self, fg_color=Color.BG, corner_radius=0)
         self.content_container.grid(row=1, column=0, sticky="nsew")
         self.content_container.grid_columnconfigure(0, weight=1)
@@ -156,30 +170,86 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
             engine=self.engine,
             app_state=self.app_state,
         )
-        self.settings_tab = SettingsTab(
-            self.content_container,
-            engine=self.engine,
-            app_state=self.app_state,
-        )
-        self.financial_rules_tab = FinancialRulesTab(
-            self.content_container,
-            engine=self.engine,
-            app_state=self.app_state,
-        )
+        self._config_tab: ConfigurationTab | None = None
+        self._logs_tab: LogsTab | None = None
+        self._system_tab: SystemTab | None = None
+
+        # Stream pipeline execution narratives to logs tab if instantiated
+        self.run_tab.on_batch_status_listener = self._on_pipeline_status_batch
+        self.run_tab.on_status_listener = self._on_pipeline_status
 
         # Display initial tab
         self.run_tab.grid(row=0, column=0, sticky="nsew")
 
+    def _on_pipeline_status_batch(self, events: list[ObservabilityEvent]) -> None:
+        """Forward real-time status batch to logs tab if instantiated."""
+        if self._logs_tab is not None:
+            self._logs_tab.append_narrative_batch(events)
+
+    def _on_pipeline_status(self, event: ObservabilityEvent) -> None:
+        """Forward real-time status events to logs tab if instantiated."""
+        if self._logs_tab is not None:
+            self._logs_tab.append_narrative_event(event)
+
+    @property
+    def config_tab(self) -> ConfigurationTab:
+        """Lazily instantiate ConfigurationTab on first access."""
+        if self._config_tab is None:
+            self._config_tab = ConfigurationTab(
+                self.content_container,
+                engine=self.engine,
+                app_state=self.app_state,
+            )
+        return self._config_tab
+
+    @property
+    def logs_tab(self) -> LogsTab:
+        """Lazily instantiate LogsTab on first access."""
+        if self._logs_tab is None:
+            self._logs_tab = LogsTab(
+                self.content_container,
+                engine=self.engine,
+                app_state=self.app_state,
+            )
+        return self._logs_tab
+
+    @property
+    def system_tab(self) -> SystemTab:
+        """Lazily instantiate SystemTab on first access."""
+        if self._system_tab is None:
+            self._system_tab = SystemTab(
+                self.content_container,
+                engine=self.engine,
+                app_state=self.app_state,
+            )
+        return self._system_tab
+
+    @property
+    def settings_tab(self) -> SettingsTab:
+        """Backward-compatible reference to settings editor."""
+        return self.config_tab.settings_editor
+
+    @property
+    def financial_rules_tab(self) -> FinancialRulesTab:
+        """Backward-compatible reference to financial rules editor."""
+        return self.config_tab.rules_editor
+
     def switch_tab(self, tab_id: str) -> None:
         """Switch visible tab and maintain synchronicity with active state."""
-        if tab_id == self.active_tab_id:
+        # Normalize alias tab IDs
+        normalized_id = "config" if tab_id in ("settings", "rules") else tab_id
+
+        if normalized_id == self.active_tab_id:
+            # If requesting specific subtab within configuration
+            if tab_id in ("settings", "rules"):
+                self.config_tab.switch_subtab(tab_id)
             return
 
-        self.active_tab_id = tab_id
+        self.active_tab_id = normalized_id
 
         # Update button visual styling
         for tid, btn in self.tab_buttons.items():
-            if tid == tab_id:
+            if tid == normalized_id:
                 btn.configure(
                     fg_color=Color.ACCENT,
                     hover_color=Color.ACC_HOV,
@@ -192,23 +262,33 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
                     text_color="#94A3B8",
                 )
 
+        # Hide all currently instantiated views
+        self.run_tab.grid_remove()
+        if self._config_tab is not None:
+            self._config_tab.grid_remove()
+        if self._logs_tab is not None:
+            self._logs_tab.grid_remove()
+        if self._system_tab is not None:
+            self._system_tab.grid_remove()
+
         # Switch views with guaranteed synchronization
-        if tab_id == "run":
-            self.settings_tab.grid_remove()
-            self.financial_rules_tab.grid_remove()
+        if normalized_id == "run":
             self.run_tab.grid(row=0, column=0, sticky="nsew")
             self.run_tab.ensure_config_loaded(self.app_state.active_config_path)
-        elif tab_id == "settings":
-            self.run_tab.grid_remove()
-            self.financial_rules_tab.grid_remove()
-            self.settings_tab.grid(row=0, column=0, sticky="nsew")
-            self.settings_tab.ensure_config_loaded(self.app_state.active_config_path)
-        elif tab_id == "rules":
-            self.run_tab.grid_remove()
-            self.settings_tab.grid_remove()
-            self.financial_rules_tab.grid(row=0, column=0, sticky="nsew")
-            if self.app_state.active_rules_path:
-                self.financial_rules_tab.ensure_rules_loaded(self.app_state.active_rules_path)
+        elif normalized_id == "config":
+            tab = self.config_tab
+            tab.grid(row=0, column=0, sticky="nsew")
+            if tab_id in ("settings", "rules"):
+                tab.switch_subtab(tab_id)
+            tab.ensure_loaded()
+        elif normalized_id == "logs":
+            tab = self.logs_tab
+            tab.grid(row=0, column=0, sticky="nsew")
+            tab.ensure_loaded()
+        elif normalized_id == "system":
+            tab = self.system_tab
+            tab.grid(row=0, column=0, sticky="nsew")
+            tab.ensure_loaded()
 
 
 def main() -> None:
