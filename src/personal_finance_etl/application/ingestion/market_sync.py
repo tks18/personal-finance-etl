@@ -204,12 +204,16 @@ class CurrencyPipeline:
         bronze: BronzeLayer,
         status_queue: EventQueue,
         max_workers: int = 8,
+        fetch_buffer_days: int = 15,
+        max_download_attempts: int = 3,
         emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.cp = cp
         self.bronze = bronze
         self.status_queue = status_queue
         self.max_workers = max_workers
+        self.fetch_buffer_days = fetch_buffer_days
+        self.max_download_attempts = max_download_attempts
         self.emitter = emitter or get_global_emitter()
 
     def _load_cached_bronze_currency(self) -> pl.DataFrame:
@@ -292,7 +296,12 @@ class CurrencyPipeline:
 
         df_bronze_cached = self._load_cached_bronze_currency()
         extractor = CurrencyExtractor(
-            self.cp, self.status_queue, self.max_workers, emitter=self.emitter
+            self.cp,
+            self.status_queue,
+            self.max_workers,
+            fetch_buffer_days=self.fetch_buffer_days,
+            max_attempts=self.max_download_attempts,
+            emitter=self.emitter,
         )
         batch_res = extractor.extract_currency_delta(
             df_currency, global_start_date, global_end_date, df_bronze_cached
@@ -344,11 +353,17 @@ class BenchmarkPipeline:
         cp: ControlPlane,
         bronze: BronzeLayer,
         status_queue: EventQueue,
+        fetch_buffer_days: int = 15,
+        max_download_attempts: int = 3,
+        anomalous_drop_threshold: float = -0.40,
         emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.cp = cp
         self.bronze = bronze
         self.status_queue = status_queue
+        self.fetch_buffer_days = fetch_buffer_days
+        self.max_download_attempts = max_download_attempts
+        self.anomalous_drop_threshold = anomalous_drop_threshold
         self.emitter = emitter or get_global_emitter()
 
     @staticmethod
@@ -469,7 +484,14 @@ class BenchmarkPipeline:
         )
 
         df_bronze_cached = self._load_cached_bronze_benchmark()
-        extractor = BenchmarkExtractor(self.cp, self.status_queue, emitter=self.emitter)
+        extractor = BenchmarkExtractor(
+            self.cp,
+            self.status_queue,
+            fetch_buffer_days=self.fetch_buffer_days,
+            max_attempts=self.max_download_attempts,
+            anomalous_drop_threshold=self.anomalous_drop_threshold,
+            emitter=self.emitter,
+        )
         batch_res = extractor.extract_benchmark_delta(
             df_m=df_master,
             global_start_date=start_date,
@@ -523,12 +545,18 @@ class USMarketPipeline:
         bronze: BronzeLayer,
         status_queue: EventQueue,
         max_workers: int = 8,
+        fetch_buffer_days: int = 15,
+        max_download_attempts: int = 3,
+        us_price_max_staleness_days: int = 7,
         emitter: ObservabilityEmitter | None = None,
     ) -> None:
         self.cp = cp
         self.bronze = bronze
         self.status_queue = status_queue
         self.max_workers = max_workers
+        self.fetch_buffer_days = fetch_buffer_days
+        self.max_download_attempts = max_download_attempts
+        self.us_price_max_staleness_days = us_price_max_staleness_days
         self.emitter = emitter or get_global_emitter()
 
     def _load_cached_bronze_us_market(self) -> pl.DataFrame:
@@ -631,7 +659,12 @@ class USMarketPipeline:
 
         df_bronze_cached = self._load_cached_bronze_us_market()
         extractor = USMarketExtractor(
-            self.cp, self.status_queue, self.max_workers, emitter=self.emitter
+            self.cp,
+            self.status_queue,
+            self.max_workers,
+            fetch_buffer_days=self.fetch_buffer_days,
+            max_attempts=self.max_download_attempts,
+            emitter=self.emitter,
         )
         batch_res = extractor.extract_us_market_delta(
             isin_ticker_map, global_start_date, global_end_date, df_bronze_cached
@@ -665,6 +698,7 @@ class USMarketPipeline:
             df_fx_lazy=df_fx.lazy(),
             global_start_date=global_start_date,
             global_end_date=global_end_date,
+            max_price_staleness_days=self.us_price_max_staleness_days,
         )
         # Materialization Boundary: PUBLICATION_BOUNDARY
         # Materialize final continuous US market valuation dataset for pipeline publication and warehouse

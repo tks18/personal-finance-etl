@@ -403,12 +403,14 @@ class PostProcessor:
             and "Holding_Type" in schema_names
             and "Days_To_LTCG" in schema_names
         ):
+            ladder_days = self.ctx.rules.assumptions.tax.ltcg_maturity_ladder_days
+            d0, d1, d2, d3 = ladder_days[0], ladder_days[1], ladder_days[2], ladder_days[3]
             ltcg_ladder = lazy_df_agg.group_by("Closing_Date").agg(
                 pl.col("Close_Value")
                 .filter(
                     (pl.col("Holding_Type").fill_null("") == "STCG")
                     & (pl.col("Days_To_LTCG").fill_null(0) > 0)
-                    & (pl.col("Days_To_LTCG").fill_null(0) <= 30)
+                    & (pl.col("Days_To_LTCG").fill_null(0) <= d0)
                 )
                 .sum()
                 .fill_null(0.0)
@@ -416,8 +418,8 @@ class PostProcessor:
                 pl.col("Close_Value")
                 .filter(
                     (pl.col("Holding_Type").fill_null("") == "STCG")
-                    & (pl.col("Days_To_LTCG").fill_null(0) > 30)
-                    & (pl.col("Days_To_LTCG").fill_null(0) <= 90)
+                    & (pl.col("Days_To_LTCG").fill_null(0) > d0)
+                    & (pl.col("Days_To_LTCG").fill_null(0) <= d1)
                 )
                 .sum()
                 .fill_null(0.0)
@@ -425,8 +427,8 @@ class PostProcessor:
                 pl.col("Close_Value")
                 .filter(
                     (pl.col("Holding_Type").fill_null("") == "STCG")
-                    & (pl.col("Days_To_LTCG").fill_null(0) > 90)
-                    & (pl.col("Days_To_LTCG").fill_null(0) <= 180)
+                    & (pl.col("Days_To_LTCG").fill_null(0) > d1)
+                    & (pl.col("Days_To_LTCG").fill_null(0) <= d2)
                 )
                 .sum()
                 .fill_null(0.0)
@@ -434,8 +436,8 @@ class PostProcessor:
                 pl.col("Close_Value")
                 .filter(
                     (pl.col("Holding_Type").fill_null("") == "STCG")
-                    & (pl.col("Days_To_LTCG").fill_null(0) > 180)
-                    & (pl.col("Days_To_LTCG").fill_null(0) <= 365)
+                    & (pl.col("Days_To_LTCG").fill_null(0) > d2)
+                    & (pl.col("Days_To_LTCG").fill_null(0) <= d3)
                 )
                 .sum()
                 .fill_null(0.0)

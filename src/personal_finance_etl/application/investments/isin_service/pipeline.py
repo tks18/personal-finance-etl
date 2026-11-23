@@ -446,7 +446,9 @@ class IsinPipeline:
         for _isin, row in self.ctx.isin_master.items():
             b_id = str(row.get("BENCHMARK_ID", ""))
             if b_id and b_id not in bm_maps:
-                bm_maps[b_id] = BenchmarkPriceProvider(b_id, self.ctx.df_b).bm_price_map
+                bm_maps[b_id] = BenchmarkPriceProvider(
+                    b_id, self.ctx.df_b, max_staleness_days=self.ctx.benchmark_max_staleness_days
+                ).bm_price_map
         return bm_maps
 
     def _build_worker_tasks(self) -> list[IsinTaskPayload]:
@@ -498,6 +500,7 @@ class IsinPipeline:
                     rules=self.ctx.rules,
                     fx_provider=self.ctx.fx_provider,
                     tmp_dir=self.tmp_dir,
+                    benchmark_max_staleness_days=self.ctx.benchmark_max_staleness_days,
                 )
             )
         return tasks
@@ -652,7 +655,7 @@ class IsinPipeline:
         current_process.daemon = False
         try:
             with concurrent.futures.ProcessPoolExecutor(
-                max_workers=min(4, os.cpu_count() or 1),
+                max_workers=min(self.ctx.isin_workers, os.cpu_count() or 1),
             ) as executor:
                 future_to_isin = {
                     executor.submit(_process_isin_worker, task): task.isin for task in tasks

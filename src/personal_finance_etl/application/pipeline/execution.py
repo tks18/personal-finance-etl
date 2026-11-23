@@ -234,7 +234,15 @@ class PipelineExecutor:
         bronze : BronzeLayer
             Bronze persistence layer.
         """
-        pipeline = BenchmarkPipeline(cp, bronze, self.status_queue, emitter=self.emitter)
+        pipeline = BenchmarkPipeline(
+            cp,
+            bronze,
+            self.status_queue,
+            fetch_buffer_days=self.cfg.market_data.fetch_buffer_days,
+            max_download_attempts=self.cfg.market_data.max_download_attempts,
+            anomalous_drop_threshold=self.cfg.market_data.anomalous_drop_threshold,
+            emitter=self.emitter,
+        )
         self.dfs["df_f_investment_benchmark_data"] = pipeline.process(
             df_market=self.dfs.get("df_f_investment_market_data"),
             df_purchase=self.dfs.get("df_f_tf_inv_purchase"),
@@ -252,7 +260,13 @@ class PipelineExecutor:
             Bronze persistence layer.
         """
         pipeline = CurrencyPipeline(
-            cp, bronze, self.status_queue, max_workers=8, emitter=self.emitter
+            cp,
+            bronze,
+            self.status_queue,
+            max_workers=self.cfg.performance.market_workers,
+            fetch_buffer_days=self.cfg.market_data.fetch_buffer_days,
+            max_download_attempts=self.cfg.market_data.max_download_attempts,
+            emitter=self.emitter,
         )
 
         cal_pd = self.dfs["df_d_calendar"]
@@ -334,7 +348,14 @@ class PipelineExecutor:
             Bronze persistence layer.
         """
         pipeline = USMarketPipeline(
-            cp, bronze, self.status_queue, max_workers=8, emitter=self.emitter
+            cp,
+            bronze,
+            self.status_queue,
+            max_workers=self.cfg.performance.market_workers,
+            fetch_buffer_days=self.cfg.market_data.fetch_buffer_days,
+            max_download_attempts=self.cfg.market_data.max_download_attempts,
+            us_price_max_staleness_days=self.cfg.market_data.us_price_max_staleness_days,
+            emitter=self.emitter,
         )
         start_date, end_date = self._resolve_us_market_range()
         df_us_market = pipeline.run(
@@ -378,6 +399,9 @@ class PipelineExecutor:
                 start_date=None,
                 end_date=None,
                 run_id=run_id,
+                isin_workers=self.cfg.performance.isin_workers,
+                fx_backward_fill_days=self.cfg.market_data.fx_backward_fill_days,
+                benchmark_max_staleness_days=self.cfg.market_data.benchmark_max_staleness_days,
             ),
             status_queue=self.status_queue,
             emitter=self.emitter,

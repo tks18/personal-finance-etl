@@ -83,7 +83,11 @@ class ServiceContainer:
 
     def create_duckdb_manager(self, cfg: Settings) -> DuckDBManager:
         """Instantiate a DuckDBManager bound to the configured database path."""
-        return DuckDBManager(cfg.database.target_db_base_path, cfg.database.target_db_name)
+        return DuckDBManager(
+            cfg.database.target_db_base_path,
+            cfg.database.target_db_name,
+            threads=cfg.performance.duckdb_threads,
+        )
 
     def create_control_plane(self, cfg: Settings) -> ControlPlane:
         """Instantiate a ControlPlane bound to the configured SQLite document store."""

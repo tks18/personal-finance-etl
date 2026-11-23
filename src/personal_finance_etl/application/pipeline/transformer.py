@@ -188,7 +188,10 @@ class TransformationDAG:
             base_transactions_lazy, self.rules, d_expense_subcategory_lazy
         )
         f_transfer_transactions_lazy = transform_f_transfer_transactions(
-            base_transactions_lazy, d_asset_subcategory_lazy, d_asset_category_lazy
+            base_transactions_lazy,
+            d_asset_subcategory_lazy,
+            d_asset_category_lazy,
+            self.rules,
         )
 
         return {
