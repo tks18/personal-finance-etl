@@ -66,6 +66,7 @@ dependencies = [
     "uuid>=1.30",
     "filelock>=4.0.3",
     "openpyxl>=3.1.5",
+    "tomlkit>=0.15.2",
 ]
 
 [dependency-groups]
