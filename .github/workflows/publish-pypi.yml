@@ -6,7 +6,6 @@ on:
       - master
     paths:
       - "src/**"
-      - "docs/**"
       - "pyproject.toml"
       - "README.md"
       - "LICENSE"

@@ -6,8 +6,6 @@ Personal Finance ETL is a local-first financial data platform. Changes can affec
 
 > **Make the smallest coherent change, preserve financial truth unless methodology is intentionally changing, and make the impact inspectable.**
 
-Start with the [Developer Guide](docs/developer/development-guide.md), [System Architecture](docs/architecture/system-architecture.md), [Design Decisions](docs/architecture/design-decisions.md), and [Documentation Portal](docs/README.md).
-
 ## Before you change code
 
 Identify the boundary that owns the change:
@@ -110,9 +108,7 @@ Use the quality commands configured by the repository, including Ruff, mypy, and
 
 ```text
 source code → implementation ground truth
-/docs       → canonical technical documentation
-Wiki        → guided exploration
-README      → public showcase / router
+README      → public showcase
 ```
 
 Update documentation when implementation or methodology changes, without duplicating the same material across every surface.

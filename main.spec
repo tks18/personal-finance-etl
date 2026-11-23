@@ -6,7 +6,7 @@ PyInstaller.config.CONF['upx_dir'] = r"C:\Tools\_bins_\upx"
 
 datas = [
     ('README.md', '.'),
-    ('docs/assets/images', 'docs/assets/images'),
+    ('src/personal_finance_etl/presentation/assets', 'presentation/assets'),
 ]
 datas += collect_data_files('personal_finance_etl')
 binaries = []
@@ -53,7 +53,7 @@ a = Analysis(
         'pyarrow.flight', 'pyarrow.cuda', 'pyarrow.ganesha',
         'duckdb.tests', 'psutil.tests', 'cryptography',
         'PIL.ImageQt', 'PIL.ImageWebP',
-        'mypy', 'mypyc', 'pyright', 'black', 'flake8', 'isort', 'ruff',
+        'mypy', 'mypyc', 'pyright', 'black', 'isort', 'ruff',
         'poethepoet', 'pyinstaller', 'tkreload', 'vulture'
     ],
     noarchive=False,
@@ -80,6 +80,6 @@ exe_cli = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='docs/assets/images/logo.ico',
+    icon='src/personal_finance_etl/presentation/assets/logo.ico',
     version='version_info.txt',
 )

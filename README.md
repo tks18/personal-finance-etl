@@ -1,7 +1,5 @@
 <p align="center">
-  <a href="docs/README.md">
-    <img src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/.github/assets/logo.png" width="136" alt="Personal Finance ETL logo">
-  </a>
+  <img src="https://raw.githubusercontent.com/tks18/personal-finance-etl/master/.github/assets/logo.png" width="136" alt="Personal Finance ETL logo">
 </p>
 
 # Personal Finance ETL
@@ -22,34 +20,15 @@ So the project grew from ETL into the system I now use to **preserve financial e
     <a href="https://pypi.org/project/personal-finance-etl/">
         <img src="https://img.shields.io/pypi/v/personal-finance-etl?label=PyPI" alt="PyPI">
     </a>
-    <a href="docs/README.md">
-        <img src="https://img.shields.io/badge/Docs-Technical%20Specifications-7c3aed?logo=markdown&amp;logoColor=white" alt="Documentation">
-    </a>
     <a href="https://pepy.tech/projects/personal-finance-etl"><img src="https://static.pepy.tech/personalized-badge/personal-finance-etl?period=total&amp;units=INTERNATIONAL_SYSTEM&amp;left_color=BLACK&amp;right_color=GREEN&amp;left_text=downloads" alt="PyPI Downloads"></a>
     <img src="https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&amp;logoColor=white" alt="Python">
     <a href="https://www.gnu.org/licenses/gpl-3.0"><img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg" alt="License: GPL-3.0"></a>
 </p>
 
 <p align="center">
-    <a href="https://app.codacy.com/gh/tks18/personal-finance-etl/dashboard?utm_source=gh&amp;utm_medium=referral&amp;utm_content=&amp;utm_campaign=Badge_grade"><img src="https://app.codacy.com/project/badge/Grade/49aca2f2e7d044a5916adc56beb4c7dd" alt="Codacy Badge"></a>
-    <a href="https://www.codefactor.io/repository/github/tks18/personal-finance-etl"><img src="https://www.codefactor.io/repository/github/tks18/personal-finance-etl/badge" alt="CodeFactor"></a>
-    <a href="https://coderabbit.ai"><img src="https://img.shields.io/coderabbit/prs/github/tks18/personal-finance-etl?label=CodeRabbit%20Reviews" alt="CodeRabbit Reviews"></a>
-    <a href="https://deepwiki.com/tks18/personal-finance-etl"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
-</p>
-
-<p align="center">
     <img src="https://img.shields.io/badge/Architecture-Local--First-2F855A" alt="Local First">
     <img src="https://img.shields.io/badge/Analytics-DuckDB-FFF000?logo=duckdb&amp;logoColor=000" alt="DuckDB">
     <img src="https://img.shields.io/badge/Compute-Polars-CD792C" alt="Polars">
-</p>
-
-<p align="center">
-  <strong>Explore:</strong>
-  <a href="docs/README.md">Documentation</a> ·
-  <a href="docs/architecture/README.md">Architecture</a> ·
-  <a href="docs/finance/README.md">Finance</a> ·
-  <a href="docs/developer/README.md">Developer</a> ·
-  <a href="docs/reference/README.md">Reference</a>
 </p>
 
 ---
@@ -182,8 +161,6 @@ The important bit is not the count. It is the ownership.
 
 SQLite remembers what happened operationally. DuckDB serves current analytical state. Neither database is forced to cosplay as the other one.
 
-**Go deeper:** [Data Lifecycle](docs/architecture/data-lifecycle.md) · [Warehouse Architecture](docs/architecture/warehouse-architecture.md) · [Control Plane Lifecycle](docs/architecture/control-plane-artifact-lifecycle.md)
-
 ---
 
 ### 2. Investment evidence becomes financial state
@@ -231,8 +208,6 @@ It preserves the observation, preserves the reconstructed state, classifies the 
 
 That gives future FIFO, performance, Tax, and audit logic a traceable explanation for why state changed.
 
-**Go deeper:** [Investment Data Model](docs/finance/investment-data-model.md) · [FIFO & Realized Events](docs/finance/fifo-and-realized-events.md) · [Investment Reconciliation](docs/finance/investment-reconciliation.md)
-
 ---
 
 ### 3. Performance is allowed to say “I do not know”
@@ -265,8 +240,6 @@ Portfolio XIRR is recomputed from portfolio cash flows. It is not a weighted ave
 
 For foreign assets, missing FX also does **not** silently become `1.0`.
 
-**Go deeper:** [Performance & Risk](docs/finance/investment-performance-and-risk.md) · [Multi-Currency & FX](docs/finance/multi-currency-and-fx.md) · [Metrics & Methodology](docs/finance/metrics-and-methodology.md)
-
 ---
 
 ### 4. Tax consumes financial truth, it does not rebuild it
@@ -291,8 +264,6 @@ Some outcomes are intentionally marked for review when the evidence does not jus
 
 I would rather have a `CHECK_REQUIRED` state than a very confident lie with two decimal places.
 
-**Go deeper:** [Tax Methodology](docs/finance/tax-methodology.md) · [Financial Rules](docs/configuration/financial-rules-reference.md)
-
 ---
 
 ### 5. Household finance and investments meet at wealth, not upstream
@@ -316,8 +287,6 @@ The system lets those domains remain distinct until they need to answer shared q
 That keeps “money moved between my accounts” from becoming income and keeps “my investment changed market value” from becoming household cash flow.
 
 This sounds obvious until a data model accidentally disagrees.
-
-**Go deeper:** [Financial Model](docs/finance/financial-model.md) · [Cash Flow & Wealth](docs/finance/cashflow-and-wealth.md)
 
 ---
 
@@ -347,8 +316,6 @@ Only then does the stochastic layer model future uncertainty through mechanisms 
 Simulation inputs, model configuration, and outputs are fingerprinted for provenance.
 
 A sophisticated model can widen the questions I ask. It cannot abolish uncertainty with enough NumPy.
-
-**Go deeper:** [FIRE Methodology](docs/finance/fire-methodology.md) · [FIRE & Simulation Reference](docs/configuration/fire-and-simulation-reference.md)
 
 ---
 
@@ -386,8 +353,6 @@ Backup and restore coordinate SQLite and DuckDB, stage validation before install
 
 “It's just a ZIP” is not a recovery architecture. 😂
 
-**Go deeper:** [Identity & Replay](docs/architecture/deterministic-identity-and-replay.md) · [Reliability & Recovery](docs/architecture/reliability-and-recovery.md) · [Backup & Restore](docs/architecture/backup-and-restore.md)
-
 ---
 
 ## Software architecture that has to survive real finance
@@ -414,8 +379,6 @@ The system intentionally mixes styles:
 - **dataclasses / TypedDict / Pydantic / enums** where each shape actually earns its mechanism.
 
 I am not trying to win OOP bingo. I am trying to make the ownership legible.
-
-**Go deeper:** [System Architecture](docs/architecture/system-architecture.md) · [Application & Dependency Architecture](docs/architecture/application-and-dependency-architecture.md) · [Engineering Standards](docs/developer/engineering-standards.md)
 
 ---
 
@@ -450,8 +413,6 @@ FIFO is stateful because acquisition history is stateful. Pretending otherwise w
 In one documented production workload with more than **1,600 source artifacts** and roughly **147 investment-instrument workloads**, fresh ingestion plus complete analytical reconstruction was observed around **40–45 seconds**, while a warm-cache run was observed around **24 seconds**, publishing roughly **449k Silver + Gold rows**.
 
 Those are workload-specific observations, not benchmark promises.
-
-**Go deeper:** [Developer Guide](docs/developer/development-guide.md) · [Testing & Validation](docs/developer/testing-and-validation.md)
 
 ---
 
@@ -490,8 +451,6 @@ edit
 
 Release infrastructure powered by memory is a particularly brave architectural choice, so I automated the boring parts instead.
 
-**Go deeper:** [Tooling, Quality & Release Engineering](docs/developer/tooling-quality-and-release-engineering.md)
-
 ---
 
 ## Product surface
@@ -519,16 +478,7 @@ pfetl doctor
 pfetl info
 ```
 
-The package also ships the technical documentation so the same knowledge base is available from the application surfaces.
-
 A successful installation is not automatically a runnable financial environment. The application still needs valid settings, financial rules, reference inputs, and compatible source evidence.
-
-Start with:
-
-- [Installation](docs/getting-started/installation.md)
-- [Quick Start](docs/getting-started/quick-start.md)
-- [CLI & Desktop](docs/getting-started/cli-and-desktop.md)
-- [Configuration](docs/configuration/README.md)
 
 ---
 
@@ -628,51 +578,12 @@ I would rather document a smaller guarantee accurately than a larger one poetica
 
 ## How to explore the project
 
-The repository now has four intentionally different knowledge surfaces.
+The repository has intentionally separated knowledge surfaces:
 
-| Surface     | Job                                           | Start here                       |
-| ----------- | --------------------------------------------- | -------------------------------- |
-| **README**  | **SHOW** the project quickly                  | you are here                     |
-| **`/docs`** | **SPECIFY** implementation and finance deeply | [Technical Docs](docs/README.md) |
-| **Code**    | **PROVE** the behavior                        | `src/personal_finance_etl/`      |
-
-If all four say exactly the same thing at exactly the same depth, I have successfully maintained four copies of one document. That would be impressive in the least useful possible way. 😄
-
-### I want the architecture
-
-- [System Architecture](docs/architecture/system-architecture.md)
-- [Application & Dependency Architecture](docs/architecture/application-and-dependency-architecture.md)
-- [Data Lifecycle](docs/architecture/data-lifecycle.md)
-- [Reliability & Recovery](docs/architecture/reliability-and-recovery.md)
-
-### I want the finance
-
-- [Financial Model](docs/finance/financial-model.md)
-- [Investment Data Model](docs/finance/investment-data-model.md)
-- [FIFO & Realized Events](docs/finance/fifo-and-realized-events.md)
-- [Tax Methodology](docs/finance/tax-methodology.md)
-- [FIRE Methodology](docs/finance/fire-methodology.md)
-
-### I need exact contracts
-
-- [Reference](docs/reference/README.md)
-- [Silver Data Contracts](docs/reference/silver-data-contracts.md)
-- [Gold Data Contracts](docs/reference/gold-data-contracts.md)
-- [Identity & Grain Contracts](docs/reference/identity-and-grain-contracts.md)
-
-### I want to change the system
-
-- [Developer Guide](docs/developer/README.md)
-- [Engineering Standards](docs/developer/engineering-standards.md)
-- [Adding Data Sources](docs/developer/adding-data-sources.md)
-- [Schema Evolution](docs/developer/data-contract-and-schema-evolution.md)
-- [Testing & Validation](docs/developer/testing-and-validation.md)
-
-### I want the project story
-
-- [Project](docs/about/project.md)
-- [About Me](docs/about/about-me.md)
-- [Roadmap](docs/roadmap.md)
+| Surface    | Job                          | Start here                  |
+| ---------- | ---------------------------- | --------------------------- |
+| **README** | **SHOW** the project quickly | you are here                |
+| **Code**   | **PROVE** the behavior       | `src/personal_finance_etl/` |
 
 ---
 

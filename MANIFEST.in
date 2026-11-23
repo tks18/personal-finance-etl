@@ -1,5 +1,4 @@
 include README.md
 include LICENSE
-recursive-include docs *.md
-include docs/manifest.json
 recursive-include src *.py
+recursive-include src/personal_finance_etl/presentation/assets *

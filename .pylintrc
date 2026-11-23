@@ -5,9 +5,6 @@
 # Linked Companion Configs:
 #   - Ruff: ruff.toml
 #   - Mypy: mypy.ini
-#   - Flake8: .flake8
-#   - Codacy: .codacy.yml
-#   - CodeRabbit: .coderabbit.yaml
 # ==============================================================================
 
 [MASTER]
@@ -108,8 +105,7 @@ ignore-paths =
 #    - explicit PEP 484 re-export aliases in package __init__.py files (useless-import-alias)
 #    - module-level multiprocessing logging singleton (global-statement)
 #    - Numba JIT parallel range iterable detection (not-an-iterable)
-# 3. Duplicate code (delegated to Codacy CPD)
-# 4. Scope-specific exclusions for CLI tasks, scripts, and tests
+# 3. Scope-specific exclusions for CLI tasks, scripts, and tests
 disable =
     line-too-long,
     trailing-whitespace,

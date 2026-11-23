@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # pylint: skip-file
-# flake8: noqa
 """Automated GitHub Pull Request Generator adhering to Enterprise Standards.
 
 Owns

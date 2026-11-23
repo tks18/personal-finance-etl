@@ -86,7 +86,7 @@ class UnifiedETLTab(BaseEngineTab):
         title_block = ctk.CTkFrame(hdr, fg_color="transparent")
         title_block.grid(row=0, column=0, columnspan=2, padx=(16, 16), pady=(12, 0), sticky="w")
 
-        logo_path = resource_path("docs/assets/images/logo.png")
+        logo_path = resource_path("presentation/assets/logo.png")
         if os.path.exists(logo_path):
             img = ctk.CTkImage(dark_image=Image.open(logo_path), size=(36, 36))
             ctk.CTkLabel(title_block, image=img, text="").grid(
@@ -501,7 +501,7 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
         self.minsize(760, 500)
         self.configure(fg_color="#0D1117")
 
-        icon_path = resource_path("docs/assets/images/logo.ico")
+        icon_path = resource_path("presentation/assets/logo.ico")
         if os.path.exists(icon_path):
             self.after(200, lambda: self.iconbitmap(icon_path))
 

@@ -1,5 +1,4 @@
 # pylint: skip-file
-# flake8: noqa
 """Automated Git Commit Tool adhering to Commitlint and Conventional Commits.
 
 Owns
@@ -15,11 +14,11 @@ Owns
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, field
 import json
-from pathlib import Path
 import subprocess
 import sys
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import cast
 
 from rich.console import Console
@@ -223,9 +222,6 @@ def _infer_commit_message(file_item: ChangedFile) -> str:
         "pyrefly.toml",
         "uv.toml",
         ".pylintrc",
-        ".flake8",
-        ".codacy.yml",
-        ".coderabbit.yaml",
         "poe_tasks.toml",
     }:
         tool_name = Path(norm).stem.lstrip(".").split(".")[0].rstrip("_")
