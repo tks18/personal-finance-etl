@@ -28,37 +28,139 @@ class TaxRates(BaseModel):
     """Statutory Long Term and Short Term capital gains tax rates across asset classes."""
 
     equity_ltcg: float = Field(
-        0.125, description="LTCG tax rate for listed Indian equity (Section 112A)."
+        0.125,
+        description="LTCG tax rate for listed Indian equity (Section 112A).",
+        json_schema_extra={
+            "ui_widget": "percentage",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.005,
+            "unit": "%",
+        },
     )
     equity_stcg: float = Field(
-        0.20, description="STCG tax rate for listed Indian equity (Section 111A)."
+        0.20,
+        description="STCG tax rate for listed Indian equity (Section 111A).",
+        json_schema_extra={
+            "ui_widget": "percentage",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.005,
+            "unit": "%",
+        },
     )
-    # Foreign listed equity (US stocks via LRS) — post-Budget 2024:
-    #   LTCG (> 24 months): 12.5% concessional rate (same as Default_LTCG).
-    #   STCG (≤ 24 months): investor's income-tax slab rate (same as Default_STCG).
     foreign_equity_ltcg: float = Field(
         0.125,
         description="LTCG tax rate for foreign listed equity (US stocks via LRS) — 12.5% post-Budget 2024.",
+        json_schema_extra={
+            "ui_widget": "percentage",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.005,
+            "unit": "%",
+        },
     )
     foreign_equity_stcg: float = Field(
-        0.30, description="STCG tax rate for foreign listed equity (US stocks via LRS) — slab rate."
+        0.30,
+        description="STCG tax rate for foreign listed equity (US stocks via LRS) — slab rate.",
+        json_schema_extra={
+            "ui_widget": "percentage",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.005,
+            "unit": "%",
+        },
     )
-    debt_ltcg: float = Field(0.20, description="LTCG tax rate for debt.")
-    debt_stcg: float = Field(0.30, description="STCG tax rate for debt.")
-    gold_ltcg: float = Field(0.20, description="LTCG tax rate for gold.")
-    gold_stcg: float = Field(0.30, description="STCG tax rate for gold.")
+    debt_ltcg: float = Field(
+        0.20,
+        description="LTCG tax rate for debt.",
+        json_schema_extra={
+            "ui_widget": "percentage",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.005,
+            "unit": "%",
+        },
+    )
+    debt_stcg: float = Field(
+        0.30,
+        description="STCG tax rate for debt.",
+        json_schema_extra={
+            "ui_widget": "percentage",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.005,
+            "unit": "%",
+        },
+    )
+    gold_ltcg: float = Field(
+        0.20,
+        description="LTCG tax rate for gold.",
+        json_schema_extra={
+            "ui_widget": "percentage",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.005,
+            "unit": "%",
+        },
+    )
+    gold_stcg: float = Field(
+        0.30,
+        description="STCG tax rate for gold.",
+        json_schema_extra={
+            "ui_widget": "percentage",
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.005,
+            "unit": "%",
+        },
+    )
 
 
 class TaxSubHeadConfig(BaseModel):
     """Tax sub-head mapping and statutory taxability/method configuration."""
 
-    tax_head_display_name: str
-    sub_head_display_name: str
-    cat_ids: list[str] = Field(default_factory=list)
-    sub_cat_ids: list[str] = Field(default_factory=list)
-    tax_credit_sub_cat_ids: list[str] = Field(default_factory=list)
-    taxability: TaxabilityType = "review"
-    tax_method: TaxMethodType = "review"
+    tax_head_display_name: str = Field(
+        ...,
+        description="Display label of the statutory tax head.",
+        json_schema_extra={"ui_widget": "text", "placeholder": "e.g. Income From Salary"},
+    )
+    sub_head_display_name: str = Field(
+        ...,
+        description="Display label of the statutory tax sub-head.",
+        json_schema_extra={"ui_widget": "text", "placeholder": "e.g. Basic Salary"},
+    )
+    cat_ids: list[str] = Field(
+        default_factory=list,
+        description="Category IDs mapping to this statutory sub-head.",
+        json_schema_extra={"ui_widget": "id_list"},
+    )
+    sub_cat_ids: list[str] = Field(
+        default_factory=list,
+        description="Subcategory UIDs mapping to this statutory sub-head.",
+        json_schema_extra={"ui_widget": "id_list"},
+    )
+    tax_credit_sub_cat_ids: list[str] = Field(
+        default_factory=list,
+        description="Subcategory UIDs representing tax credits/withholdings for this sub-head.",
+        json_schema_extra={"ui_widget": "id_list"},
+    )
+    taxability: TaxabilityType = Field(
+        default="review",
+        description="Statutory taxability classification (taxable, non_taxable, review).",
+        json_schema_extra={
+            "ui_widget": "choice",
+            "options": ["taxable", "non_taxable", "review"],
+        },
+    )
+    tax_method: TaxMethodType = Field(
+        default="review",
+        description="Statutory tax calculation method.",
+        json_schema_extra={
+            "ui_widget": "choice",
+            "options": ["ordinary_rate", "capital_gains", "exempt", "review"],
+        },
+    )
 
     @model_validator(mode="after")
     def validate_tax_credit_ids(self) -> Self:
@@ -87,8 +189,16 @@ class TaxHeadConfig(BaseModel):
 class InvestmentExclusionsConfig(BaseModel):
     """Explicit subcategory exclusions for short-term and long-term capital gains."""
 
-    stcg_sub_cat_ids: list[str] = Field(default_factory=list)
-    ltcg_sub_cat_ids: list[str] = Field(default_factory=list)
+    stcg_sub_cat_ids: list[str] = Field(
+        default_factory=list,
+        description="Subcategory UIDs excluded from Short Term Capital Gains calculations.",
+        json_schema_extra={"ui_widget": "id_list"},
+    )
+    ltcg_sub_cat_ids: list[str] = Field(
+        default_factory=list,
+        description="Subcategory UIDs excluded from Long Term Capital Gains calculations.",
+        json_schema_extra={"ui_widget": "id_list"},
+    )
 
     @model_validator(mode="after")
     def validate_exclusions(self) -> Self:
@@ -290,22 +400,29 @@ class TaxAssumptions(BaseModel):
     """Statutory tax rules, holding thresholds, exemption limits, and head mappings."""
 
     debt_mf_cutoff_date: str = Field(
-        ..., description="Date before which debt mutual funds have indexation benefits."
+        ...,
+        description="Date before which debt mutual funds have indexation benefits.",
+        json_schema_extra={"ui_widget": "text", "placeholder": "YYYY-MM-DD"},
     )
     harvest_wait_days_threshold: int = Field(
         ...,
         description="Minimum days to wait before re-buying a harvested instrument to avoid wash-sale rules.",
+        json_schema_extra={"min": 0, "max": 365, "step": 5, "unit": "days"},
     )
     ltcg_threshold_months: dict[str, int] = Field(
         ...,
         description="Holding period thresholds in calendar months for Long Term Capital Gains across asset classes.",
+        json_schema_extra={"ui_widget": "key_value_dict"},
     )
     fallback_equity_ltcg_exemption: float = Field(
-        ..., description="Annual tax-free exemption limit for equity Long Term Capital Gains."
+        ...,
+        description="Annual tax-free exemption limit for equity Long Term Capital Gains.",
+        json_schema_extra={"min": 0.0, "step": 5000.0, "unit": "INR"},
     )
     ltcg_maturity_ladder_days: list[int] = Field(
         default_factory=lambda: [30, 90, 180, 365],
         description="Ascending calendar-day thresholds for LTCG maturity ladder projection buckets.",
+        json_schema_extra={"ui_widget": "int_list", "unit": "days"},
     )
 
     @field_validator("ltcg_maturity_ladder_days")
