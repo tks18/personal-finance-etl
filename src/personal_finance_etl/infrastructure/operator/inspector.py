@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import urllib.error
 import urllib.request
 
 import duckdb
@@ -30,7 +31,10 @@ from personal_finance_etl.contracts.operator import (
     WarehouseInventory,
 )
 from personal_finance_etl.infrastructure.preferences import PreferencesManager
-from personal_finance_etl.infrastructure.warehouse.contracts import DATA_CONTRACT_REGISTRY
+from personal_finance_etl.infrastructure.warehouse.contracts import (
+    BRONZE_CONTRACT_REGISTRY,
+    DATA_CONTRACT_REGISTRY,
+)
 
 __all__ = ["LocalOperatorInspector"]
 
@@ -140,7 +144,7 @@ class LocalOperatorInspector:
                         cursor.execute(
                             "SELECT actionable_count, synced_count, healed_count, "
                             "failed_count, deferred_count, sync_status, created_at "
-                            "FROM cp_sync_summaries WHERE run_id = ?",
+                            "FROM cp_run_sync_summaries WHERE run_id = ?",
                             (latest_run_id,),
                         )
                         s_row = cursor.fetchone()
@@ -169,9 +173,7 @@ class LocalOperatorInspector:
 
     def inspect_warehouse_inventory(self) -> WarehouseInventory:
         """Inspect registered warehouse contracts and active schema inventory."""
-        bronze_count = sum(
-            1 for c in DATA_CONTRACT_REGISTRY if c.physical_table.startswith("bronze.")
-        )
+        bronze_count = len(BRONZE_CONTRACT_REGISTRY)
         silver_count = sum(
             1 for c in DATA_CONTRACT_REGISTRY if c.physical_table.startswith("silver.")
         )
@@ -251,14 +253,24 @@ class LocalOperatorInspector:
                 error_message=str(e),
             )
 
-    def probe_market_data_provider(self, timeout: float = 2.5) -> bool:
+    def probe_market_data_provider(self, timeout: float = 3.0) -> bool:
         """Probe external market data provider connectivity without throwing."""
-        try:
-            req = urllib.request.Request(
-                "https://query1.finance.yahoo.com",
-                headers={"User-Agent": "pfetl-doctor/1.0"},
-            )
-            with urllib.request.urlopen(req, timeout=timeout):
+        endpoints = [
+            "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI",
+            "https://finance.yahoo.com",
+        ]
+        for url in endpoints:
+            try:
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PFETL/1.0"},
+                )
+                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                    if resp.status in (200, 301, 302):
+                        return True
+            except urllib.error.HTTPError:
+                # An HTTP error response confirms network reachability to host
                 return True
-        except Exception:
-            return False
+            except Exception:
+                continue
+        return False
