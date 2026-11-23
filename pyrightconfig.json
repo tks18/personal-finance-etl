@@ -4,8 +4,11 @@
     "scripts",
     "tests"
   ],
+  "venvPath": ".",
+  "venv": ".venv",
   "extraPaths": [
-    "."
+    ".",
+    "src"
   ],
   "exclude": [
     "**/node_modules",
