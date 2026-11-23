@@ -72,11 +72,17 @@ class BenchmarkExtractor:
         cp: ControlPlane,
         status_queue: EventQueue | None = None,
         max_workers: int = 8,
+        fetch_buffer_days: int = 15,
+        max_attempts: int = 3,
+        anomalous_drop_threshold: float = -0.40,
         emitter: EventEmitter | None = None,
     ) -> None:
         self.cp = cp
         self.status_queue = status_queue
         self.max_workers = max_workers
+        self.fetch_buffer_days = fetch_buffer_days
+        self.max_attempts = max_attempts
+        self.anomalous_drop_threshold = anomalous_drop_threshold
         self.emitter = resolve_market_emitter(emitter, status_queue)
 
     def _emit_event(self, event: ObservabilityEvent) -> None:
@@ -84,8 +90,12 @@ class BenchmarkExtractor:
         self.emitter.emit(event)
 
     @staticmethod
-    def _check_anomalous_drops(ticker: str, hist_pd: pd.DataFrame) -> tuple[list[str], str | None]:
-        """Detect single-day percentage declines exceeding 40% threshold.
+    def _check_anomalous_drops(
+        ticker: str,
+        hist_pd: pd.DataFrame,
+        drop_threshold: float = -0.40,
+    ) -> tuple[list[str], str | None]:
+        """Detect single-day percentage declines exceeding anomalous drop threshold.
 
         Parameters
         ----------
@@ -93,6 +103,8 @@ class BenchmarkExtractor:
             Yahoo Finance ticker symbol.
         hist_pd : pd.DataFrame
             Historical price observations dataframe.
+        drop_threshold : float, default=-0.40
+            Negative fractional drop threshold (e.g. -0.40 for -40%).
 
         Returns
         -------
@@ -100,10 +112,12 @@ class BenchmarkExtractor:
             List of anomalous drop dates and optional warning message string.
         """
         pct_drops: pd.Series = cast(pd.Series, hist_pd["Close"].pct_change())
-        huge_drops = pct_drops[pct_drops < -0.4]
+        huge_drops = pct_drops[pct_drops < drop_threshold]
         if not huge_drops.empty:
             drop_dts = [d.strftime("%Y-%m-%d") for d in huge_drops.index]
-            warn_msg = f"⚠ Anomalous drops (>40%) in {ticker} on {', '.join(drop_dts)}"
+            warn_msg = (
+                f"⚠ Anomalous drops (<{drop_threshold:.0%}) in {ticker} on {', '.join(drop_dts)}"
+            )
             diagnostics.warning("Benchmark Extractor: %s", warn_msg)
             return drop_dts, warn_msg
         return [], None
@@ -204,6 +218,8 @@ class BenchmarkExtractor:
             start_dt=start_dt,
             end_dt=end_dt,
             max_cached_date=max_cached_date,
+            buffer_days=self.fetch_buffer_days,
+            max_attempts=self.max_attempts,
             label="Benchmark Extractor",
         )
         if early_res is not None:
@@ -211,7 +227,9 @@ class BenchmarkExtractor:
 
         assert hist_pd is not None
         df_new = self._build_benchmark_spine(hist_pd, row, ticker, fetch_start, end_dt)
-        drop_dts, warn_msg = self._check_anomalous_drops(ticker, hist_pd)
+        drop_dts, warn_msg = self._check_anomalous_drops(
+            ticker, hist_pd, drop_threshold=self.anomalous_drop_threshold
+        )
 
         msg = f"✓ API Fetched {ticker} ({fetch_start} to {end_dt}) - {df_new.height} rows"
         if warn_msg:

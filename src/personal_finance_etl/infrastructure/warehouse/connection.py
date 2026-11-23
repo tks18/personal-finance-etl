@@ -41,9 +41,15 @@ class DuckDBManager:
         Name of the database file.
     """
 
-    def __init__(self, base_path: str, db_name: str = "Personal_Finance_DB.duckdb") -> None:
+    def __init__(
+        self,
+        base_path: str,
+        db_name: str = "Personal_Finance_DB.duckdb",
+        threads: int = 4,
+    ) -> None:
         self.base_path = base_path
         self.db_path = os.path.join(base_path, db_name)
+        self.threads = max(1, threads)
         if base_path:
             os.makedirs(base_path, exist_ok=True)
         self._conn: duckdb.DuckDBPyConnection | None = None
@@ -75,9 +81,11 @@ class DuckDBManager:
         self._conn = duckdb.connect(self.db_path)
         mem_gb = max(4, int(psutil.virtual_memory().total / (1024**3) * 0.75))
         self._conn.execute(f"PRAGMA memory_limit='{mem_gb}GB'")  # nosec B608
-        self._conn.execute("PRAGMA threads=4")
+        self._conn.execute(f"PRAGMA threads={self.threads}")
         diagnostics.debug(
-            "DuckDB Warehouse: Connection configured: memory_limit=%dGB, threads=4", mem_gb
+            "DuckDB Warehouse: Connection configured: memory_limit=%dGB, threads=%d",
+            mem_gb,
+            self.threads,
         )
         return self._conn
 

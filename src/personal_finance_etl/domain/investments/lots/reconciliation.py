@@ -36,8 +36,9 @@ class LotReconciler:
         Instrument ISIN code.
     """
 
-    def __init__(self, isin: str) -> None:
+    def __init__(self, isin: str, cost_basis_tolerance: float = 0.01) -> None:
         self.isin = isin
+        self.cost_basis_tolerance = cost_basis_tolerance
 
     def _reconcile_quantity_add(
         self,
@@ -281,7 +282,7 @@ class LotReconciler:
         target_avg = float(m_buy_val) / current_units
         our_avg = sum(lot.qty * lot.price for lot in active_lots) / current_units
 
-        if abs(our_avg - target_avg) <= 0.01 or our_avg <= 0:
+        if abs(our_avg - target_avg) <= self.cost_basis_tolerance or our_avg <= 0:
             return []
 
         r = target_avg / our_avg

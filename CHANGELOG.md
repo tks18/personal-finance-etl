@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [11.3.5](https://github.com/tks18/personal-finance-etl/compare/11.3.4...11.3.5) (2026-11-23)
+
+
+### Features 🔥
+
+* **config:** introduce perf, market, and analytics configuration models ([1a4b7a4](https://github.com/tks18/personal-finance-etl/commit/1a4b7a4eacc59dc294d9c5a64eb50f7aaf38d1d7))
+
+
+### Code Refactoring 🖌
+
+* **domain:** relocate hardcoded assumptions into declarative rules ([561a3eb](https://github.com/tks18/personal-finance-etl/commit/561a3ebaf09397080e14cfb765776d179d08c5b0))
+* **pipeline:** wire configurable parameters ([32871fe](https://github.com/tks18/personal-finance-etl/commit/32871fe5ab398994734412d0f94e255f51e26972))
+
+
+### Tests 🧪
+
+* **hardening:** add parameter sensitivity verification ([3b0edf3](https://github.com/tks18/personal-finance-etl/commit/3b0edf3013907466d7af18742ec7c66303d322cd))
+
 ### [11.3.4](https://github.com/tks18/personal-finance-etl/compare/11.3.3...11.3.4) (2026-11-23)
 
 

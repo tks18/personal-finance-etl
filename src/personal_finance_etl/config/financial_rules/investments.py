@@ -29,3 +29,8 @@ class PortfolioManagementRules(BaseModel):
         default=5.0,
         description="Threshold (in percentage points) for triggering a rebalance requirement.",
     )
+    cost_basis_tolerance: float = Field(
+        default=0.01,
+        ge=0.0,
+        description="Discrepancy tolerance threshold for cost basis unit validation.",
+    )

@@ -30,3 +30,17 @@ reference_data = "CONTENT"
 [observability]
 logs_directory = "logs/runs"
 retain_last_n_runs = 5
+max_age_days = 30
+
+[performance]
+duckdb_threads = 4
+market_workers = 8
+isin_workers = 4
+
+[market_data]
+fetch_buffer_days = 15
+max_download_attempts = 3
+anomalous_drop_threshold = -0.50
+us_price_max_staleness_days = 7
+fx_backward_fill_days = 30
+benchmark_max_staleness_days = 7

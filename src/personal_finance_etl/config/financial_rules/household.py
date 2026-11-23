@@ -44,6 +44,34 @@ class NonCashIncomeRules(BaseModel):
     sub_category_ids: list[str] = Field(default_factory=list)
 
 
+class IncomeGroupingRules(BaseModel):
+    """Configurable thresholds and patterns for dynamic income subcategory grouping."""
+
+    salary_category_name: str = Field(
+        default="Salary",
+        description="Category name identifying primary salary income for allowance grouping.",
+    )
+    allowance_name_pattern: str = Field(
+        default="allowance",
+        description="Case-insensitive substring pattern identifying allowance subcategories.",
+    )
+    allowance_group_name: str = Field(
+        default="Allowances",
+        description="Category group display name assigned to matched allowance subcategories.",
+    )
+    active_group_threshold: float = Field(
+        default=0.50,
+        ge=0.0,
+        le=1.0,
+        description="Top cumulative proportion assigned to distinct subcategory.",
+    )
+    min_tail_frequency: int = Field(
+        default=3,
+        ge=1,
+        description="Minimum frequency below which low-frequency items group to Other.",
+    )
+
+
 class IncomeRules(BaseModel):
     """Container grouping household income classification rules."""
 
@@ -51,6 +79,7 @@ class IncomeRules(BaseModel):
     dividends: DividendIncomeRules = Field(default_factory=DividendIncomeRules)
     interest: InterestIncomeRules = Field(default_factory=InterestIncomeRules)
     non_cash: NonCashIncomeRules = Field(default_factory=NonCashIncomeRules)
+    grouping: IncomeGroupingRules = Field(default_factory=IncomeGroupingRules)
 
 
 class CoreExpenseRules(BaseModel):
@@ -60,10 +89,67 @@ class CoreExpenseRules(BaseModel):
     sub_category_ids: list[str] = Field(default_factory=list)
 
 
+class ExpenseAnalyticsRules(BaseModel):
+    """Configurable parameters for household expense spending and variance analytics."""
+
+    short_window_months: int = Field(
+        default=3,
+        ge=1,
+        description="Short-term trailing months window for moving average spend.",
+    )
+    medium_window_months: int = Field(
+        default=6,
+        ge=1,
+        description="Medium-term trailing months window for moving average spend.",
+    )
+    long_window_months: int = Field(
+        default=12,
+        ge=1,
+        description="Long-term trailing months window for moving average spend.",
+    )
+    investment_group_patterns: list[str] = Field(
+        default_factory=lambda: ["invest", "saving"],
+        description="Keywords in CATEGORY_GROUPS identifying investment outflows.",
+    )
+    fixed_group_patterns: list[str] = Field(
+        default_factory=lambda: [
+            "fixed",
+            "utilities",
+            "rent",
+            "insurance",
+            "tax",
+            "emi",
+            "loan",
+        ],
+        description="Keywords in CATEGORY_GROUPS identifying fixed non-discretionary expenses.",
+    )
+    consistency_score_cap: float = Field(
+        default=10.0,
+        gt=0.0,
+        description="Upper bound cap on spend consistency score ratio.",
+    )
+    creep_spend_multiplier: float = Field(
+        default=1.15,
+        gt=0.0,
+        description="Multiplier on short-term average spend indicating expenditure creep.",
+    )
+    creep_frequency_multiplier: float = Field(
+        default=1.10,
+        gt=0.0,
+        description="Multiplier on short-term frequency indicating transaction frequency creep.",
+    )
+    creep_spike_multiplier: float = Field(
+        default=1.50,
+        gt=0.0,
+        description="Multiplier indicating extreme single-month spending surge.",
+    )
+
+
 class ExpenseRules(BaseModel):
     """Container grouping household expense classification rules."""
 
     core: CoreExpenseRules = Field(default_factory=CoreExpenseRules)
+    analytics: ExpenseAnalyticsRules = Field(default_factory=ExpenseAnalyticsRules)
 
 
 class IncomeAllocationRules(BaseModel):
@@ -128,6 +214,10 @@ class CashflowAssetRules(BaseModel):
     working_capital_conduits: list[str] = Field(default_factory=list)
     investing_activities: list[str] = Field(default_factory=list)
     financing_liabilities: list[str] = Field(default_factory=list)
+    investing_analysis_offset_months: int = Field(
+        default=-1,
+        description="Relative month offset for cashflow investing analysis window boundary.",
+    )
 
 
 class DigitalAssetRules(BaseModel):

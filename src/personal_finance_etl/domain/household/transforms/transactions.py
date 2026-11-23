@@ -239,13 +239,20 @@ def transform_f_transfer_transactions(
     base_transactions_lazy: pl.LazyFrame,
     df_d_asset_subcategory_lazy: pl.LazyFrame,
     df_d_asset_category_lazy: pl.LazyFrame,
+    rules: FinancialRules | None = None,
 ) -> pl.LazyFrame:
     """Branches off base transactions for Transfers (TYPE = 3 or 4).
 
     Applies RELATED() logic via joins, plus temporal shifts for EDATE().
     """
     df_joined_sub = base_transactions_lazy.join(
-        df_d_asset_subcategory_lazy.select([pl.col("UID").alias("SUB_UID"), "ASSET_GROUP_ID"]),
+        df_d_asset_subcategory_lazy.select(
+            [
+                pl.col("UID").alias("SUB_UID"),
+                "ASSET_GROUP_ID",
+                pl.col("cashflow_activity_type").fill_null(""),
+            ]
+        ),
         left_on="ASSET_ID",
         right_on="SUB_UID",
         how="left",
@@ -258,9 +265,12 @@ def transform_f_transfer_transactions(
         how="left",
     )
 
+    offset_months = rules.assets.cashflow.investing_analysis_offset_months if rules else -1
+    offset_str = f"{offset_months}mo"
+
     return (
         df_joined_cat.filter((pl.col("TRANSACTION_TYPE") == 3) | (pl.col("TRANSACTION_TYPE") == 4))
-        .select(BASE_TRANSACTION_COLS + ["ASSET_GROUP"])
+        .select(BASE_TRANSACTION_COLS + ["ASSET_GROUP", "cashflow_activity_type"])
         .with_columns(
             pl.when(pl.col("TRANSACTION_TYPE") == 3)
             .then(pl.lit("Out"))
@@ -272,12 +282,15 @@ def transform_f_transfer_transactions(
             .then(pl.col("BASE_AMOUNT") * -1)
             .otherwise(pl.col("BASE_AMOUNT"))
             .alias("AMOUNT_PROPER"),
-            pl.when(pl.col("ASSET_GROUP") == "Investments")
-            .then(pl.col("DATE").cast(pl.Date, strict=False).dt.offset_by("-1mo"))
+            pl.when(
+                (pl.col("cashflow_activity_type") == "INVESTING")
+                | (pl.col("ASSET_GROUP") == "Investments")
+            )
+            .then(pl.col("DATE").cast(pl.Date, strict=False).dt.offset_by(offset_str))
             .otherwise(pl.col("DATE").cast(pl.Date, strict=False))
             .alias("ADJUSTED_DATE_FOR_ANALYSIS"),
         )
-        .drop("ASSET_GROUP")
+        .drop(["ASSET_GROUP", "cashflow_activity_type"])
     )
 
 

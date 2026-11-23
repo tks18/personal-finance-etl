@@ -100,6 +100,7 @@ class FIFOPortfolio:
         fy_table: FYMacroParametersTable,
         default_currency_id: str,
         isin: str,
+        cost_basis_tolerance: float = 0.01,
     ):
         self._active_lots: deque[TaxLot] = deque()
         self.tax_type = tax_type
@@ -107,7 +108,7 @@ class FIFOPortfolio:
         self.fy_table = fy_table
         self.default_currency_id = default_currency_id
         self.isin = isin
-        self._reconciler = LotReconciler(isin)
+        self._reconciler = LotReconciler(isin, cost_basis_tolerance=cost_basis_tolerance)
 
     @property
     def active_lots(self) -> list[TaxLot]:

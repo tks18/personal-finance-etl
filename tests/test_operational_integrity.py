@@ -13,20 +13,32 @@ from __future__ import annotations
 
 import ast
 import sqlite3
+from datetime import date
 from pathlib import Path
 
 import duckdb
 import polars as pl
 import pytest
+from pydantic import ValidationError
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.config.financial_rules import FinancialRules
+from personal_finance_etl.config.financial_rules.tax import TaxAssumptions
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts import (
     EngineStage,
     EventCode,
     ObservabilityContext,
     ObservabilityEvent,
+)
+from personal_finance_etl.domain.household.transforms.income_dimensions import (
+    transform_d_income_subcategory,
+)
+from personal_finance_etl.domain.household.transforms.transactions import (
+    transform_f_transfer_transactions,
+)
+from personal_finance_etl.domain.investments.reconciliation.engine import (
+    ReconciliationEngine,
 )
 from personal_finance_etl.infrastructure.observability import JsonlForensicSink
 from personal_finance_etl.infrastructure.observability.redaction import (
@@ -223,3 +235,112 @@ def test_zero_inline_or_deferred_imports_across_src() -> None:
     assert not violations, "Found inline/deferred imports inside functions:\n" + "\n".join(
         violations
     )
+
+
+def test_parameter_relocation_sensitivity(mock_rules: FinancialRules) -> None:
+    """Verify that relocated domain and settings configuration parameters dynamically alter engine behavior."""
+    # 1. Cost basis tolerance sensitivity
+    assert not ReconciliationEngine.should_reconcile_basis(
+        broker_buy_val=1000.05,
+        reconstructed_avg=100.0,
+        current_units=10.0,
+        cost_basis_tolerance=0.01,
+    )
+    assert ReconciliationEngine.should_reconcile_basis(
+        broker_buy_val=1000.05,
+        reconstructed_avg=100.0,
+        current_units=10.0,
+        cost_basis_tolerance=0.001,
+    )
+
+    # 2. Dynamic allowance grouping policy sensitivity
+    custom_rules = mock_rules.model_copy(deep=True)
+    custom_rules.income.grouping.salary_category_name = "CustomSalary"
+    custom_rules.income.grouping.allowance_name_pattern = "stipend"
+    custom_rules.income.grouping.allowance_group_name = "CustomStipends"
+
+    df_lazy_in = pl.LazyFrame(
+        {
+            "UID": ["U1", "U2"],
+            "CATEGORY_NAME": ["Monthly Stipend", "Basic Pay"],
+            "CATEGORY_ID": ["CAT1", "CAT1"],
+            "IS_DEL": ["0", "0"],
+            "TYPE": [0, 0],
+        }
+    )
+    col_mapping = {
+        "UID": "UID",
+        "CATEGORY_NAME": "CATEGORY_NAME",
+        "CATEGORY_ID": "CATEGORY_ID",
+        "IS_DEL": "IS_DEL",
+        "TYPE": "TYPE",
+    }
+    df_cat_lazy = pl.LazyFrame({"UID": ["CAT1"], "CATEGORY_NAME_SHORT": ["CustomSalary"]})
+
+    res = transform_d_income_subcategory(
+        df_lazy_in, col_mapping, df_cat_lazy, rules=custom_rules
+    ).collect()
+    row_stipend = res.filter(pl.col("UID") == "U1").to_dicts()[0]
+    row_basic = res.filter(pl.col("UID") == "U2").to_dicts()[0]
+    assert row_stipend["CATEGORY_GROUPS"] == "CustomStipends"
+    assert row_basic["CATEGORY_GROUPS"] == "Basic Pay"
+
+    # 3. Transfer analysis timing offset sensitivity
+    custom_rules.assets.cashflow.investing_analysis_offset_months = -3
+    trans_data: dict[str, list[object]] = {
+        "UID": ["T1"],
+        "DATE": ["2024-06-15"],
+        "TIME": ["12:00:00"],
+        "DESCRIPTION": ["Transfer to MF"],
+        "PAID": ["Paid"],
+        "TRANSACTION_TYPE": [3],
+        "BASE_AMOUNT": [50000.0],
+        "AMOUNT_ACCOUNT": [50000.0],
+        "LOCAL_AMOUNT": [50000.0],
+        "EXCH_RATE": [1.0],
+        "ASSET_ID": ["A1"],
+        "CATEGORY_ID": ["C1"],
+        "TO_ASSET_ID": ["A2"],
+        "TRANSFER_UID": ["TR1"],
+        "CURRENCY_ID": ["INR_INR"],
+    }
+    base_trans_lazy = pl.LazyFrame(trans_data)
+    df_asset_sub = pl.LazyFrame(
+        {
+            "UID": ["A1"],
+            "ASSET_GROUP_ID": ["G1"],
+            "cashflow_activity_type": ["INVESTING"],
+        }
+    )
+    df_asset_cat = pl.LazyFrame({"UID": ["G1"], "ASSET_GROUP": ["Investments"]})
+    res_transfer = transform_f_transfer_transactions(
+        base_trans_lazy, df_asset_sub, df_asset_cat, rules=custom_rules
+    ).collect()
+    assert res_transfer["ADJUSTED_DATE_FOR_ANALYSIS"][0] == date(2024, 3, 15)
+
+    # 4. TaxAssumptions ladder validation
+    TaxAssumptions(
+        debt_mf_cutoff_date="2023-04-01",
+        harvest_wait_days_threshold=90,
+        fallback_equity_ltcg_exemption=125000.0,
+        ltcg_threshold_months={"default": 24},
+        ltcg_maturity_ladder_days=[15, 45, 90, 180],
+    )
+
+    with pytest.raises(ValidationError):
+        TaxAssumptions(
+            debt_mf_cutoff_date="2023-04-01",
+            harvest_wait_days_threshold=90,
+            fallback_equity_ltcg_exemption=125000.0,
+            ltcg_threshold_months={"default": 24},
+            ltcg_maturity_ladder_days=[15, 90, 45, 180],
+        )
+
+    with pytest.raises(ValidationError):
+        TaxAssumptions(
+            debt_mf_cutoff_date="2023-04-01",
+            harvest_wait_days_threshold=90,
+            fallback_equity_ltcg_exemption=125000.0,
+            ltcg_threshold_months={"default": 24},
+            ltcg_maturity_ladder_days=[15, 45, 90],
+        )

@@ -70,11 +70,15 @@ class CurrencyExtractor:
         cp: ControlPlane,
         status_queue: EventQueue | None = None,
         max_workers: int = 8,
+        fetch_buffer_days: int = 15,
+        max_attempts: int = 3,
         emitter: EventEmitter | None = None,
     ) -> None:
         self.cp = cp
         self.status_queue = status_queue
         self.max_workers = max_workers
+        self.fetch_buffer_days = fetch_buffer_days
+        self.max_attempts = max_attempts
         self.emitter = resolve_market_emitter(emitter, status_queue)
 
     def _emit_event(self, event: ObservabilityEvent) -> None:
@@ -178,6 +182,8 @@ class CurrencyExtractor:
             start_dt=start_dt,
             end_dt=end_dt,
             max_cached_date=max_cached_date,
+            buffer_days=self.fetch_buffer_days,
+            max_attempts=self.max_attempts,
             label="Currency Extractor",
         )
         if early_res is not None:

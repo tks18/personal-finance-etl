@@ -20,6 +20,8 @@ import polars as pl
 
 from personal_finance_etl.config.financial_rules import FinancialRules
 
+AVERAGE_DAYS_PER_MONTH: float = 365.25 / 12.0
+
 __all__ = ["ExpenseAnalyticsBuilder", "SpendAnalyticsBuilder"]
 
 
@@ -118,15 +120,26 @@ class SpendAnalyticsBuilder:
 
     def _compute_spend_variances(self, lf_cat_agg: pl.LazyFrame) -> pl.LazyFrame:
         """Compute rolling 3M/6M/12M averages, creep flags, and spend consistency metrics."""
+        rules_exp = self.rules.expense.analytics
+        w_short = rules_exp.short_window_months
+        w_med = rules_exp.medium_window_months
+        w_long = rules_exp.long_window_months
+        inv_regex = "(?i)" + "|".join(rules_exp.investment_group_patterns)
+        fixed_regex = "(?i)" + "|".join(rules_exp.fixed_group_patterns)
+        cap = rules_exp.consistency_score_cap
+        creep_spend_mult = rules_exp.creep_spend_multiplier
+        creep_freq_mult = rules_exp.creep_frequency_multiplier
+        creep_spike_mult = rules_exp.creep_spike_multiplier
+
         return (
             lf_cat_agg.sort(["CATEGORY_ID", "MONTH_START_DATE"])
             .with_columns(
                 pl.col("Total_Monthly_Spend")
-                .rolling_mean(window_size=3)
+                .rolling_mean(window_size=w_short)
                 .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_3M_Avg_Spend"),
                 pl.col("Total_Monthly_Spend")
-                .rolling_mean(window_size=6)
+                .rolling_mean(window_size=w_med)
                 .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_6M_Avg_Spend"),
                 pl.col("Total_Monthly_Spend")
@@ -138,11 +151,11 @@ class SpendAnalyticsBuilder:
                 .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Prev_Year_Spend"),
                 pl.col("Total_Monthly_Spend")
-                .rolling_mean(window_size=12)
+                .rolling_mean(window_size=w_long)
                 .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_12M_Avg_Spend"),
                 pl.col("Total_Monthly_Spend")
-                .rolling_sum(window_size=12)
+                .rolling_sum(window_size=w_long)
                 .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_12M_Total_Spend"),
                 pl.col("Total_Monthly_Spend")
@@ -153,15 +166,15 @@ class SpendAnalyticsBuilder:
                 )
                 .alias("Cumulative_YTD_Spend"),
                 pl.col("Transaction_Count")
-                .rolling_mean(window_size=3)
+                .rolling_mean(window_size=w_short)
                 .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Trailing_3M_Avg_Frequency"),
                 pl.col("Total_Monthly_Spend")
-                .rolling_mean(window_size=12)
+                .rolling_mean(window_size=w_long)
                 .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Cat_Mean"),
                 pl.col("Total_Monthly_Spend")
-                .rolling_std(window_size=12)
+                .rolling_std(window_size=w_long)
                 .over("CATEGORY_ID", order_by="MONTH_START_DATE")
                 .alias("Cat_Std"),
                 pl.col("Total_Monthly_Spend")
@@ -177,17 +190,11 @@ class SpendAnalyticsBuilder:
                 )
                 .otherwise(0.0)
                 .alias("MoM_Variance_Pct"),
-                pl.when(
-                    pl.col("CATEGORY_GROUPS").str.to_lowercase().str.contains("(?i)invest|saving")
-                )
+                pl.when(pl.col("CATEGORY_GROUPS").str.to_lowercase().str.contains(inv_regex))
                 .then(pl.lit(True))
                 .otherwise(pl.lit(False))
                 .alias("Is_Investment"),
-                pl.when(
-                    pl.col("CATEGORY_GROUPS")
-                    .str.to_lowercase()
-                    .str.contains("(?i)fixed|utilities|rent|insurance|tax|emi|loan")
-                )
+                pl.when(pl.col("CATEGORY_GROUPS").str.to_lowercase().str.contains(fixed_regex))
                 .then(pl.lit("Fixed"))
                 .otherwise(pl.lit("Variable"))
                 .alias("Spend_Type"),
@@ -200,23 +207,29 @@ class SpendAnalyticsBuilder:
                 .alias("YoY_Variance_Pct"),
                 pl.when(pl.col("Cat_Std").is_not_null() & (pl.col("Cat_Std") > 0))
                 .then(
-                    pl.when((pl.col("Cat_Mean") / pl.col("Cat_Std")) > 10.0)
-                    .then(10.0)
+                    pl.when((pl.col("Cat_Mean") / pl.col("Cat_Std")) > cap)
+                    .then(cap)
                     .otherwise(pl.col("Cat_Mean") / pl.col("Cat_Std"))
                 )
                 .when((pl.col("Cat_Std") == 0) & (pl.col("Cat_Mean") == 0))
                 .then(pl.lit(None))
-                .otherwise(10.0)
+                .otherwise(cap)
                 .alias("Spend_Consistency_Score"),
                 (
                     (
-                        (pl.col("Total_Monthly_Spend") > (pl.col("Trailing_3M_Avg_Spend") * 1.15))
+                        (
+                            pl.col("Total_Monthly_Spend")
+                            > (pl.col("Trailing_3M_Avg_Spend") * creep_spend_mult)
+                        )
                         & (
                             pl.col("Transaction_Count")
-                            > (pl.col("Trailing_3M_Avg_Frequency") * 1.1)
+                            > (pl.col("Trailing_3M_Avg_Frequency") * creep_freq_mult)
                         )
                     )
-                    | (pl.col("Total_Monthly_Spend") > (pl.col("Trailing_3M_Avg_Spend") * 1.5))
+                    | (
+                        pl.col("Total_Monthly_Spend")
+                        > (pl.col("Trailing_3M_Avg_Spend") * creep_spike_mult)
+                    )
                 ).alias("Is_Category_Creep"),
                 pl.col("Total_Monthly_Spend")
                 .rank("dense", descending=True)
@@ -227,7 +240,7 @@ class SpendAnalyticsBuilder:
                 .otherwise(0.0)
                 .alias("Spend_Share_Pct"),
                 pl.when(pl.col("Transaction_Count") > 0)
-                .then(30.4375 / pl.col("Transaction_Count"))
+                .then(AVERAGE_DAYS_PER_MONTH / pl.col("Transaction_Count"))
                 .otherwise(None)
                 .alias("Avg_Days_Between_Transactions"),
             )

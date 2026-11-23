@@ -43,12 +43,13 @@ class ReconciliationEngine:
         broker_buy_val: float | None,
         reconstructed_avg: float,
         current_units: float,
+        cost_basis_tolerance: float = COST_BASIS_TOLERANCE,
     ) -> bool:
         """Return whether a meaningful cost basis discrepancy exists."""
         if broker_buy_val is None or current_units <= 0 or reconstructed_avg <= 0:
             return False
         target_avg = float(broker_buy_val) / current_units
-        return abs(reconstructed_avg - target_avg) > COST_BASIS_TOLERANCE
+        return abs(reconstructed_avg - target_avg) > cost_basis_tolerance
 
     @staticmethod
     def reconcile(

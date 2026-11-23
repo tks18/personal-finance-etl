@@ -71,6 +71,9 @@ class QuantRunOptions:
     start_date: date | None = None
     end_date: date | None = None
     run_id: str = "UNKNOWN"
+    isin_workers: int = 4
+    fx_backward_fill_days: int = 30
+    benchmark_max_staleness_days: int = 7
 
 
 @dataclass
@@ -88,11 +91,16 @@ class RunContext:
     rules: FinancialRules
     df_fx: pl.DataFrame | None = None
     run_id: str = "UNKNOWN"
+    isin_workers: int = 4
+    fx_backward_fill_days: int = 30
+    benchmark_max_staleness_days: int = 7
 
     def __post_init__(self) -> None:
         """Initialize transient and computed attributes after dataclass creation."""
-        default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
-        self.fx_provider = FXRateProvider(self.df_fx, default_curr)
+        default_curr = self.rules.DEFAULT_CURRENCY_ID
+        self.fx_provider = FXRateProvider(
+            self.df_fx, default_curr, backward_fill_days=self.fx_backward_fill_days
+        )
 
     @classmethod
     def load(
@@ -188,6 +196,9 @@ class RunContext:
             rules=options.rules,
             df_fx=loaded_fx,
             run_id=options.run_id,
+            isin_workers=options.isin_workers,
+            fx_backward_fill_days=options.fx_backward_fill_days,
+            benchmark_max_staleness_days=options.benchmark_max_staleness_days,
         )
 
 

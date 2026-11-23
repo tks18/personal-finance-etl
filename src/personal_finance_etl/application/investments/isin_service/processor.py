@@ -85,12 +85,14 @@ class IsinProcessor:
         end_date: date | None,
         rules: FinancialRules,
         fx_provider: FXRateProvider | None = None,
+        benchmark_max_staleness_days: int = 7,
     ) -> None:
         self.fy_table = fy_table
         self.start_date = start_date
         self.end_date = end_date
         self.rules = rules
         self.fx_provider = fx_provider
+        self.benchmark_max_staleness_days = benchmark_max_staleness_days
 
     def process(
         self,
@@ -201,11 +203,23 @@ class IsinProcessor:
         tax_subtype = str(master_row.get("TAX_SUBTYPE", "listed"))
         bench_id = master_row.get("BENCHMARK_ID")
 
-        bm_provider = BenchmarkPriceProvider(bench_id, None, prebuilt_map=bm_map)
+        bm_provider = BenchmarkPriceProvider(
+            bench_id,
+            None,
+            prebuilt_map=bm_map,
+            max_staleness_days=self.benchmark_max_staleness_days,
+        )
         snapshot_generator = SnapshotGenerator(self.fy_table, self.rules, isin, master_row)
 
-        default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
-        fifo = FIFOPortfolio(tax_type, tax_subtype, self.fy_table, default_curr, isin)
+        default_curr = self.rules.DEFAULT_CURRENCY_ID
+        fifo = FIFOPortfolio(
+            tax_type,
+            tax_subtype,
+            self.fy_table,
+            default_curr,
+            isin,
+            cost_basis_tolerance=self.rules.portfolio_management.cost_basis_tolerance,
+        )
 
         first_p_date = (
             to_date_obj(p_inst[0]["Date"])
@@ -309,10 +323,7 @@ class IsinProcessor:
                 "industry": str(master_row.get("INDUSTRY", "Unknown")),
                 "geo": str(master_row.get("GEO", "Unknown")),
                 "country": str(master_row.get("COUNTRY", "Unknown")),
-                "currency": str(
-                    master_row.get("CURRENCY_ID")
-                    or getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
-                ),
+                "currency": str(master_row.get("CURRENCY_ID") or self.rules.DEFAULT_CURRENCY_ID),
             }
         )
         return ISINProcessResult(

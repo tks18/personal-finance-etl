@@ -463,6 +463,7 @@ class RunLifecycleCoordinator:
             retention_mgr = LogRetentionManager(
                 logs_dir=logs_dir,
                 retain_last_n_runs=self.cfg.observability.retain_last_n_runs,
+                max_age_days=self.cfg.observability.max_age_days,
             )
             retention_mgr.prune_expired_traces()
         except Exception as retention_err:
