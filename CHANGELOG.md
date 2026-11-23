@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [11.3.7](https://github.com/tks18/personal-finance-etl/compare/11.3.6...11.3.7) (2026-11-23)
+
+
+### Features 🔥
+
+* **config:** enrich financial rules metadata and constraints ([ead6dfa](https://github.com/tks18/personal-finance-etl/commit/ead6dfa73905d2fd57d0da2a157fc38dc2dbe454))
+* **desktop:** add financial rules tab and structured matrix widgets ([32ba9fd](https://github.com/tks18/personal-finance-etl/commit/32ba9fdc931e864c35dbb332aed15cd529c7dbd9))
+* **infra:** add toml rules store and engine facade methods ([356b9cb](https://github.com/tks18/personal-finance-etl/commit/356b9cb5e588b301c46b60c368b94ff72c3d8e00))
+
+
+### Tests 🧪
+
+* **desktop:** add financial rules editor test suite ([522ffce](https://github.com/tks18/personal-finance-etl/commit/522ffce7faf7fe04e2a5cf6181f265b336104aa7))
+
+
+### Code Refactoring 🖌
+
+* **desktop:** add rules_editors ([4e6cfa0](https://github.com/tks18/personal-finance-etl/commit/4e6cfa04ab3d3308a958cea093d4a606965c2bac))
+
 ### [11.3.6](https://github.com/tks18/personal-finance-etl/compare/11.3.5...11.3.6) (2026-11-23)
 
 
