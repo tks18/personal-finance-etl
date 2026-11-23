@@ -42,7 +42,7 @@ class FXValidationGate:
     def __init__(self, rules: FinancialRules, fx_provider: FXRateProvider | None):
         self.rules = rules
         self.fx_provider = fx_provider
-        self._default_currency: str = getattr(rules, "DEFAULT_CURRENCY_ID", "INR_INR")
+        self._default_currency: str = rules.DEFAULT_CURRENCY_ID
 
     def validate(self, isin: str, master_row: IsinMasterRecord, first_p_date: date) -> None:
         """Raise if FX data is unavailable for *isin*.

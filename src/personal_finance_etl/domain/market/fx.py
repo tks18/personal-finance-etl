@@ -51,8 +51,14 @@ class FXRateProvider:
     bounded 30-day backward fallback for weekends/holidays.
     """
 
-    def __init__(self, df_fx: pl.DataFrame | None, default_currency_id: str) -> None:
+    def __init__(
+        self,
+        df_fx: pl.DataFrame | None,
+        default_currency_id: str,
+        backward_fill_days: int = 30,
+    ) -> None:
         self.default_currency_id = default_currency_id
+        self.backward_fill_days = max(0, backward_fill_days)
         self.fx_map: dict[tuple[date, str], float] = {}
         if df_fx is not None and not df_fx.is_empty():
             # Fast O(1) dictionary
@@ -72,8 +78,8 @@ class FXRateProvider:
         if rate is not None:
             return rate
 
-        # Fallback to latest available rate: search backwards up to 30 days
-        for i in range(1, 31):
+        # Fallback to latest available rate: search backwards up to configured days
+        for i in range(1, self.backward_fill_days + 1):
             fallback_date = d - timedelta(days=i)
             rate = self.fx_map.get((fallback_date, currency_id))
             if rate is not None:

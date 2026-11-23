@@ -212,7 +212,7 @@ class HarvestRecommendationCalculator:
         pl.LazyFrame
             Augmented lazy frame with Stepup_Eligible, Can_Harvest_Loss, and Harvest_Recommendation.
         """
-        wait_days = rules.assumptions.tax.harvest_wait_days_threshold if rules else 90
+        wait_days = rules.assumptions.tax.harvest_wait_days_threshold
 
         # Derive foreign equity TAX_SUBTYPE exclusions from config if available;
         # fall back to standard asset classes if unconfigured.

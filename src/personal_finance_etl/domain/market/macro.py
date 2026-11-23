@@ -30,8 +30,6 @@ __all__ = [
     "add_months",
 ]
 
-_DEFAULT_DEBT_MF_CUTOFF = date(2023, 4, 1)
-
 
 class FYMapEntry(TypedDict):
     """Structure for an indexed financial year entry."""
@@ -71,7 +69,7 @@ def add_months(d: date, months: int) -> date:
     return date(year, month, day)
 
 
-def get_ltcg_threshold_months(tax_type: str, tax_subtype: str, rules: FinancialRules | None) -> int:
+def get_ltcg_threshold_months(tax_type: str, tax_subtype: str, rules: FinancialRules) -> int:
     """Return holding period threshold for LTCG in calendar months based on declarative rules.
 
     Parameters
@@ -80,7 +78,7 @@ def get_ltcg_threshold_months(tax_type: str, tax_subtype: str, rules: FinancialR
         Tax classification type (e.g. "equity", "debt", "reit").
     tax_subtype : str
         Tax classification subtype (e.g. "listed", "unlisted", "foreign").
-    rules : FinancialRules | None
+    rules : FinancialRules
         Authoritative financial rules configuration.
 
     Returns
@@ -88,17 +86,18 @@ def get_ltcg_threshold_months(tax_type: str, tax_subtype: str, rules: FinancialR
     int
         Holding period threshold in months.
     """
+    if not rules or not hasattr(rules, "assumptions"):
+        raise ValueError(
+            "FinancialRules with assumptions is required to resolve LTCG threshold months"
+        )
+
     tt = tax_type.strip().lower()
     tst = tax_subtype.strip().lower()
 
     if tt == "equity" and tst in ("us_listed", "us_stocks", "foreign"):
         tst = "unlisted"
 
-    thresholds = (
-        rules.assumptions.tax.ltcg_threshold_months
-        if rules and hasattr(rules, "assumptions")
-        else {}
-    )
+    thresholds = rules.assumptions.tax.ltcg_threshold_months
 
     key = f"{tt}_{tst}"
     if key in thresholds:
@@ -106,8 +105,12 @@ def get_ltcg_threshold_months(tax_type: str, tax_subtype: str, rules: FinancialR
     key_base = f"{tt}_"
     if key_base in thresholds:
         return thresholds[key_base]
+    if "default" in thresholds:
+        return thresholds["default"]
 
-    return 24  # Default 24 months
+    raise KeyError(
+        f"No LTCG threshold month mapping defined for '{tt}_{tst}' in assumptions.tax.ltcg_threshold_months"
+    )
 
 
 class FYMacroParametersTable:
@@ -130,7 +133,7 @@ class FYMacroParametersTable:
         ("default", ""): ("Default_LTCG", "Default_STCG"),
     }
 
-    def _parse_row(self, row: dict[str, object], default_cutoff: date | None) -> FYMapEntry:
+    def _parse_row(self, row: dict[str, object], default_cutoff: date) -> FYMapEntry:
         """Parse a single financial year row into a typed FYMapEntry.
 
         Parameters
@@ -164,7 +167,7 @@ class FYMacroParametersTable:
         return {
             "start": start_d,
             "end": end_d,
-            "debt_cutoff": cutoff_d or default_cutoff or _DEFAULT_DEBT_MF_CUTOFF,
+            "debt_cutoff": cutoff_d or default_cutoff,
             "raw": cast(dict[str, float | str | date | None], row),
         }
 
@@ -174,11 +177,10 @@ class FYMacroParametersTable:
         if df.is_empty():
             raise ValueError("Macro Parameters DataFrame cannot be empty.")
 
-        default_cutoff = (
-            to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date, strict=False)
-            if self.rules and hasattr(self.rules, "assumptions")
-            else _DEFAULT_DEBT_MF_CUTOFF
-        )
+        cutoff_obj = to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date, strict=True)
+        if cutoff_obj is None:
+            raise ValueError("Invalid debt_mf_cutoff_date in assumptions.tax")
+        default_cutoff = cutoff_obj
 
         for row in df.to_dicts():
             try:
@@ -280,18 +282,23 @@ class FYMacroParametersTable:
     def get_debt_mf_cutoff(self, ref_date: date) -> date:
         """Get the debt mutual fund taxation cutoff date applicable at `ref_date`."""
         entry = self._find_entry(ref_date)
-        return entry["debt_cutoff"] if entry else _DEFAULT_DEBT_MF_CUTOFF
+        if entry:
+            return entry["debt_cutoff"]
+        cutoff_obj = to_date_obj(self.rules.assumptions.tax.debt_mf_cutoff_date, strict=True)
+        if cutoff_obj is None:
+            raise ValueError("Invalid debt_mf_cutoff_date in assumptions.tax")
+        return cutoff_obj
 
     def get_tax_rates(
         self, tax_type: str, tax_subtype: str, lot_buy_date: date, ref_date: date
     ) -> tuple[float, float]:
         """Get (LTCG_rate, STCG_rate) for the given asset and dates."""
         entry = self._find_entry(ref_date)
-        cutoff = entry["debt_cutoff"] if entry else _DEFAULT_DEBT_MF_CUTOFF
-        key = self._classify(tax_type, tax_subtype, lot_buy_date, cutoff)
-
         if entry is None:
             raise ValueError(f"No Tax Rate defined for FY encompassing date: {ref_date}")
+
+        cutoff = entry["debt_cutoff"]
+        key = self._classify(tax_type, tax_subtype, lot_buy_date, cutoff)
 
         ltcg_col, stcg_col = self._COL_MAP.get(key, ("Default_LTCG", "Default_STCG"))
         raw = entry["raw"]
@@ -306,11 +313,7 @@ class FYMacroParametersTable:
 
     def get_equity_ltcg_exemption(self, ref_date: date) -> float:
         """Return the annual LTCG exemption limit specifically for equity."""
-        fallback = (
-            self.rules.assumptions.tax.fallback_equity_ltcg_exemption
-            if self.rules and hasattr(self.rules, "assumptions")
-            else 125000.0
-        )
+        fallback = self.rules.assumptions.tax.fallback_equity_ltcg_exemption
         entry = self._find_entry(ref_date)
         if entry is None:
             return fallback
@@ -340,11 +343,7 @@ class FYMacroParametersTable:
 
     def get_risk_free_rate(self, ref_date: date) -> float:
         """Get the annualized risk-free interest rate for `ref_date`."""
-        fallback = (
-            self.rules.assumptions.macro.fallback_risk_free_rate
-            if self.rules and hasattr(self.rules, "assumptions")
-            else 0.05
-        )
+        fallback = self.rules.assumptions.macro.fallback_risk_free_rate
         entry = self._find_entry(ref_date)
         if entry is None:
             return fallback
@@ -359,11 +358,7 @@ class FYMacroParametersTable:
 
     def get_inflation_rate(self, ref_date: date) -> float:
         """Get the annual inflation rate for `ref_date`."""
-        fallback = (
-            self.rules.assumptions.macro.fallback_inflation_rate
-            if self.rules and hasattr(self.rules, "assumptions")
-            else 0.05
-        )
+        fallback = self.rules.assumptions.macro.fallback_inflation_rate
         entry = self._find_entry(ref_date)
         if entry is None:
             return fallback
@@ -378,11 +373,7 @@ class FYMacroParametersTable:
 
     def get_ordinary_income_rate(self, ref_date: date) -> float:
         """Get the estimated ordinary income tax rate for `ref_date`."""
-        fallback = (
-            self.rules.assumptions.macro.fallback_ordinary_income_rate
-            if self.rules and hasattr(self.rules, "assumptions")
-            else 0.30
-        )
+        fallback = self.rules.assumptions.macro.fallback_ordinary_income_rate
         entry = self._find_entry(ref_date)
         if entry is None:
             return fallback

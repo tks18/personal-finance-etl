@@ -283,12 +283,16 @@ def transform_d_income_subcategory(
         how="left",
     )
 
+    salary_cat = rules.income.grouping.salary_category_name if rules else "Salary"
+    allowance_pattern = rules.income.grouping.allowance_name_pattern if rules else "allowance"
+    allowance_group = rules.income.grouping.allowance_group_name if rules else "Allowances"
+
     df_transformed = df_joined.with_columns(
         pl.when(
-            (pl.col("CATEGORY_NAME_SHORT") == "Salary")
-            & pl.col("CATEGORY_NAME").str.contains("(?i)allowance")
+            (pl.col("CATEGORY_NAME_SHORT") == salary_cat)
+            & pl.col("CATEGORY_NAME").str.contains(f"(?i){allowance_pattern}")
         )
-        .then(pl.lit("Allowances"))
+        .then(pl.lit(allowance_group))
         .otherwise(pl.col("CATEGORY_NAME"))
         .alias("CATEGORY_GROUPS")
     ).drop("CATEGORY_NAME_SHORT")

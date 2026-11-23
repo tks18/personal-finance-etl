@@ -437,6 +437,7 @@ def transform_us_market_data(
     df_fx_lazy: pl.LazyFrame,
     global_start_date: date,
     global_end_date: date,
+    max_price_staleness_days: int = 7,
 ) -> pl.LazyFrame:
     """Transform bronze raw US stock prices into a continuous silver daily series.
 
@@ -466,6 +467,7 @@ def transform_us_market_data(
     df_spine_with_prices = _join_and_validate_prices(
         df_spine=df_spine_eager.lazy(),
         df_bronze_prices_lazy=df_bronze_prices_lazy,
+        max_price_staleness_days=max_price_staleness_days,
     )
 
     return _join_fx_and_calculate_pnl(

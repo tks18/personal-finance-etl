@@ -167,7 +167,7 @@ class SnapshotGenerator:
         lot_return: float,
     ) -> _LotFxAttribution:
         """Decompose investment performance into native asset and foreign currency returns."""
-        default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
+        default_curr = self.rules.DEFAULT_CURRENCY_ID
         if lot.currency_id and lot.currency_id != default_curr and ctx.fx_provider:
             return compute_foreign_fx_attribution(lot, ctx, age, buy_val_lot, pnl)
         return compute_domestic_fx_attribution(
@@ -194,7 +194,7 @@ class SnapshotGenerator:
         else:
             day_weight = 1.0
 
-        default_curr = getattr(self.rules, "DEFAULT_CURRENCY_ID", "INR_INR")
+        default_curr = self.rules.DEFAULT_CURRENCY_ID
         bm = compute_lot_benchmark_metrics(lot, ctx, age, lot_cagr, default_curr)
 
         pnl = (ctx.m_price - lot.price) * lot.qty
