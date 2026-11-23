@@ -4,7 +4,6 @@ Owns
 ----
 - RunTab: Primary execution dashboard for running pipelines, managing database snapshots,
   restoring backups, and viewing live logs and progress.
-- UnifiedETLTab: Backward-compatible alias for RunTab.
 - Two-way state synchronization with AppState.
 
 Does not own
@@ -34,7 +33,7 @@ from personal_finance_etl.presentation.desktop.base_tab import BaseEngineTab
 from personal_finance_etl.presentation.desktop.state import AppState
 from personal_finance_etl.presentation.desktop.theme import Color
 
-__all__ = ["RunTab", "UnifiedETLTab"]
+__all__ = ["RunTab"]
 
 
 class RunTab(BaseEngineTab):
@@ -538,7 +537,3 @@ class RunTab(BaseEngineTab):
                     presentation_kind=PresentationKind.FAILURE,
                 ),
             )
-
-
-# Backward compatibility alias
-UnifiedETLTab = RunTab
