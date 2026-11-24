@@ -237,6 +237,33 @@ def test_zero_inline_or_deferred_imports_across_src() -> None:
     )
 
 
+def test_application_operator_architectural_isolation() -> None:
+    """Assert application.operator does not import infrastructure and is assembled via composition."""
+    operator_py = SRC_ROOT / "application" / "operator.py"
+    tree = ast.parse(operator_py.read_text(encoding="utf-8"), filename=str(operator_py))
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                assert not alias.name.startswith("personal_finance_etl.infrastructure"), (
+                    f"Forbidden infrastructure import in application.operator: {alias.name}"
+                )
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                assert not node.module.startswith("personal_finance_etl.infrastructure"), (
+                    f"Forbidden infrastructure import in application.operator: {node.module}"
+                )
+
+    # Verify composition root assembly
+    from personal_finance_etl.application.operator import OperatorService
+    from personal_finance_etl.bootstrap.container import ServiceContainer
+    from personal_finance_etl.contracts.operator import OperatorInspector
+
+    service = ServiceContainer().create_operator_service()
+    assert isinstance(service, OperatorService)
+    assert isinstance(service._inspector, OperatorInspector)  # pyright: ignore[reportPrivateUsage]
+
+
 def test_parameter_relocation_sensitivity(mock_rules: FinancialRules) -> None:
     """Verify that relocated domain and settings configuration parameters dynamically alter engine behavior."""
     # 1. Cost basis tolerance sensitivity

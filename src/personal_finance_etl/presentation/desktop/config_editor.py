@@ -61,6 +61,7 @@ class ConfigFieldEditor(ctk.CTkFrame):  # type: ignore[misc]
 
         self._build_label()
         self._build_input(initial_value)
+        self._error_label: ctk.CTkLabel | None = None
 
         # Bottom row separator
         sep = ctk.CTkFrame(self, fg_color="#1E293B", height=1, corner_radius=0)
@@ -635,6 +636,45 @@ class ConfigFieldEditor(ctk.CTkFrame):  # type: ignore[misc]
             self._var.set(str(value if value is not None else ""))
             if hasattr(self, "_update_path_status_pill"):
                 self._update_path_status_pill()
+        self.clear_error()
+
+    def set_error(self, message: str | None) -> None:
+        """Set or clear inline validation error message and red border highlight (Item 22)."""
+        if message:
+            if hasattr(self, "_control") and hasattr(self._control, "configure"):
+                try:
+                    self._control.configure(border_color="#EF4444", border_width=1)
+                except Exception:
+                    pass
+            if self._error_label is None:
+                self._error_label = ctk.CTkLabel(
+                    self,
+                    text=f"⚠ {message}",
+                    font=ctk.CTkFont(family="Segoe UI", size=9),
+                    text_color="#EF4444",
+                    anchor="w",
+                )
+                self._error_label.grid(
+                    row=2, column=0, columnspan=2, sticky="w", padx=4, pady=(0, 2)
+                )
+            else:
+                self._error_label.configure(text=f"⚠ {message}")
+        else:
+            self.clear_error()
+
+    def clear_error(self) -> None:
+        """Clear error highlight and remove inline error label."""
+        if hasattr(self, "_control") and hasattr(self._control, "configure"):
+            try:
+                self._control.configure(border_color=Color.BORDER, border_width=1)
+            except Exception:
+                pass
+        if self._error_label is not None:
+            try:
+                self._error_label.destroy()
+            except Exception:
+                pass
+            self._error_label = None
 
 
 class Matrix3x3Editor(ctk.CTkFrame):  # type: ignore[misc]

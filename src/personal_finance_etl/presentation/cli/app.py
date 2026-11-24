@@ -37,7 +37,7 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from personal_finance_etl.application.facade import PersonalFinanceEngine
-from personal_finance_etl.application.operator import OperatorService
+from personal_finance_etl.bootstrap.container import ServiceContainer
 from personal_finance_etl.contracts.observability import (
     EventCode,
     ObservabilityEvent,
@@ -177,7 +177,7 @@ def _handle_restore(
 def _handle_status(args: argparse.Namespace) -> None:
     """Render read-only system status and latest execution health."""
     config_path: str | None = getattr(args, "config", None)
-    op = OperatorService(config_path=config_path)
+    op = ServiceContainer().create_operator_service(config_path=config_path)
     status = op.get_status()
 
     console.print(f"\n[bold cyan]PFETL v{__version__} · System Status[/bold cyan]\n")
@@ -242,7 +242,7 @@ def _handle_doctor(args: argparse.Namespace) -> None:
     """Execute actionable system health checks."""
     config_path: str | None = getattr(args, "config", None)
     rules_path: str | None = getattr(args, "rules", None)
-    op = OperatorService(config_path=config_path, rules_path=rules_path)
+    op = ServiceContainer().create_operator_service(config_path=config_path, rules_path=rules_path)
     report = op.run_doctor()
 
     console.print(f"\n[bold cyan]PFETL v{__version__} · System Doctor Diagnostics[/bold cyan]\n")
@@ -280,7 +280,7 @@ def _handle_doctor(args: argparse.Namespace) -> None:
 def _handle_info(args: argparse.Namespace) -> None:
     """Display runtime environment, resolved paths, and warehouse inventory."""
     config_path: str | None = getattr(args, "config", None)
-    op = OperatorService(config_path=config_path)
+    op = ServiceContainer().create_operator_service(config_path=config_path)
     info = op.get_info()
 
     console.print(f"\n[bold cyan]PFETL v{__version__} · System Information[/bold cyan]\n")
@@ -439,11 +439,11 @@ def main_cli(args: argparse.Namespace) -> None:
     elif command == "info":
         _handle_info(args)
     elif command == "snapshot":
-        engine = PersonalFinanceEngine()
+        engine = ServiceContainer().create_engine()
         config_path = getattr(args, "config", None)
         _handle_snapshot(engine, config_path)
     elif command == "restore":
-        engine = PersonalFinanceEngine()
+        engine = ServiceContainer().create_engine()
         config_path = getattr(args, "config", None)
         restore_target = getattr(args, "target", None)
         if not restore_target:
@@ -454,7 +454,7 @@ def main_cli(args: argparse.Namespace) -> None:
         cron_mode: bool = bool(getattr(args, "cron", False))
         if not cron_mode:
             print_bootloader()
-        engine = PersonalFinanceEngine()
+        engine = ServiceContainer().create_engine()
         config_path = getattr(args, "config", None)
         rules_path = getattr(args, "rules", None)
         auto_mode: bool = bool(getattr(args, "auto", False)) or cron_mode

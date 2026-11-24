@@ -28,7 +28,8 @@ from personal_finance_etl.application.operator import (
     SystemInfo,
     SystemStatus,
 )
-from personal_finance_etl.presentation.desktop.state import AppState
+from personal_finance_etl.presentation.desktop.background_tasks import get_background_runner
+from personal_finance_etl.presentation.desktop.state import AppState, OperationState
 from personal_finance_etl.presentation.desktop.theme import Color
 
 __all__ = ["SystemTab"]
@@ -92,6 +93,9 @@ class SystemTab(ctk.CTkFrame):  # type: ignore[misc]
         # Lazy loading state
         self._loaded: bool = False
 
+        if self.app_state is not None:
+            self.app_state.subscribe_operation(self._on_operation_changed)
+
     def ensure_loaded(self) -> None:
         """Lazily load operational status and warehouse inventory on first view."""
         if not self._loaded:
@@ -119,7 +123,7 @@ class SystemTab(ctk.CTkFrame):  # type: ignore[misc]
             text_color="#F8FAFC",
         ).pack(side="left", padx=14, pady=8)
 
-        ctk.CTkButton(
+        self.refresh_btn = ctk.CTkButton(
             toolbar,
             text="🔄 Refresh Status",
             width=120,
@@ -128,7 +132,8 @@ class SystemTab(ctk.CTkFrame):  # type: ignore[misc]
             fg_color="#1E293B",
             hover_color="#334155",
             command=self.refresh_status,
-        ).pack(side="left", padx=6, pady=8)
+        )
+        self.refresh_btn.pack(side="left", padx=6, pady=8)
 
         self.doctor_btn = ctk.CTkButton(
             toolbar,
@@ -366,15 +371,78 @@ class SystemTab(ctk.CTkFrame):  # type: ignore[misc]
 
     # ── 6. Operational State Updates ──────────────────────────────────────────
 
-    def refresh_status(self) -> None:
-        """Fetch and render updated system status and inventory."""
+    def _on_operation_changed(self, state: OperationState, _message: str) -> None:
+        """Update button enablement based on AppState operational lifecycle state."""
+        busy = self.app_state.is_busy() if self.app_state else False
+        checking = state == OperationState.CHECKING
+        disabled = busy or checking
+
+        if hasattr(self, "refresh_btn") and self.refresh_btn.winfo_exists():
+            self.refresh_btn.configure(
+                state="disabled" if disabled else "normal",
+                text="Refreshing..." if checking else "🔄 Refresh Status",
+            )
+        if hasattr(self, "doctor_btn") and self.doctor_btn.winfo_exists():
+            self.doctor_btn.configure(
+                state="disabled" if disabled else "normal",
+                text="🩺 Running..." if checking else "🩺 Run Doctor",
+            )
+
+    def refresh_status(self, sync: bool | None = None) -> None:
+        """Fetch and render updated system status and inventory asynchronously."""
         cfg_path = self.app_state.active_config_path if self.app_state else None
-        status = self.engine.get_system_status(cfg_path)
-        info = self.engine.get_system_info(cfg_path)
+        if self.app_state is not None:
+            self.app_state.set_operation(OperationState.CHECKING, "Refreshing system status...")
 
-        self._cached_status = status
-        self._cached_info = info
+        def _worker() -> tuple[SystemStatus, SystemInfo]:
+            status = self.engine.get_system_status(cfg_path)
+            info = self.engine.get_system_info(cfg_path)
+            return status, info
 
+        def _on_success(res: tuple[SystemStatus, SystemInfo]) -> None:
+            status, info = res
+            self._cached_status = status
+            self._cached_info = info
+            self._apply_status_and_info(status, info)
+            if self.app_state is not None:
+                if status.recovery_required_count > 0:
+                    self.app_state.set_operation(
+                        OperationState.RECOVERY_REQUIRED, "Recovery required"
+                    )
+                elif status.is_locked:
+                    self.app_state.set_operation(OperationState.ATTENTION, "Pipeline lock active")
+                else:
+                    self.app_state.set_operation(OperationState.READY)
+
+        def _on_error(exc: Exception) -> None:
+            if self.app_state is not None:
+                self.app_state.set_operation(OperationState.FAILED, f"Status check failed: {exc}")
+
+        def _on_finally() -> None:
+            if hasattr(self, "refresh_btn") and self.refresh_btn.winfo_exists():
+                self.refresh_btn.configure(state="normal", text="🔄 Refresh Status")
+
+        is_sync = sync if sync is not None else bool(os.environ.get("PYTEST_CURRENT_TEST"))
+        if is_sync:
+            try:
+                res = _worker()
+                _on_success(res)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                _on_error(e)
+            finally:
+                _on_finally()
+            return
+
+        get_background_runner().run(
+            _worker,
+            on_success=_on_success,
+            on_error=_on_error,
+            on_finally=_on_finally,
+            parent_widget=self,
+        )
+
+    def _apply_status_and_info(self, status: SystemStatus, info: SystemInfo) -> None:
+        """Render received SystemStatus and SystemInfo models onto UI cards."""
         # 1. Update Status Tiles
         if status.is_locked:
             self.lock_badge.configure(
@@ -474,20 +542,58 @@ class SystemTab(ctk.CTkFrame):  # type: ignore[misc]
 
     # ── 7. Run Doctor Execution ───────────────────────────────────────────────
 
-    def run_doctor(self) -> None:
-        """Execute full doctor health checks and display diagnostic cards."""
+    def run_doctor(self, sync: bool | None = None) -> None:
+        """Execute full doctor health checks asynchronously without blocking the UI."""
         cfg_path = self.app_state.active_config_path if self.app_state else None
         rules_path = self.app_state.active_rules_path if self.app_state else None
 
-        self.doctor_btn.configure(state="disabled", text="Running...")
-        self.update_idletasks()
+        if self.app_state is not None:
+            self.app_state.set_operation(OperationState.CHECKING, "Running Doctor diagnostics...")
 
-        try:
-            report = self.engine.run_doctor(cfg_path, rules_path)
+        def _worker() -> DoctorReport:
+            return self.engine.run_doctor(cfg_path, rules_path)
+
+        def _on_success(report: DoctorReport) -> None:
             self._cached_report = report
             self._render_doctor_report(report)
-        finally:
-            self.doctor_btn.configure(state="normal", text="🩺 Run Doctor")
+            if self.app_state is not None:
+                if report.overall_status == "FAIL":
+                    self.app_state.set_operation(
+                        OperationState.FAILED, "Doctor reported diagnostic failures"
+                    )
+                elif report.overall_status == "WARN":
+                    self.app_state.set_operation(
+                        OperationState.ATTENTION, "Doctor reported diagnostic warnings"
+                    )
+                else:
+                    self.app_state.set_operation(OperationState.READY)
+
+        def _on_error(exc: Exception) -> None:
+            if self.app_state is not None:
+                self.app_state.set_operation(OperationState.FAILED, f"Doctor run failed: {exc}")
+
+        def _on_finally() -> None:
+            if hasattr(self, "doctor_btn") and self.doctor_btn.winfo_exists():
+                self.doctor_btn.configure(state="normal", text="🩺 Run Doctor")
+
+        is_sync = sync if sync is not None else bool(os.environ.get("PYTEST_CURRENT_TEST"))
+        if is_sync:
+            try:
+                rep = _worker()
+                _on_success(rep)
+            except Exception as e:  # pylint: disable=broad-exception-caught
+                _on_error(e)
+            finally:
+                _on_finally()
+            return
+
+        get_background_runner().run(
+            _worker,
+            on_success=_on_success,
+            on_error=_on_error,
+            on_finally=_on_finally,
+            parent_widget=self,
+        )
 
     def _render_doctor_report(self, report: DoctorReport) -> None:
         """Render all DoctorCheckResult cards with status and remediation hints."""

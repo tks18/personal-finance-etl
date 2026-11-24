@@ -126,6 +126,14 @@ class ConfigurationTab(ctk.CTkFrame):  # type: ignore[misc]
         if sub_id == self.active_subtab:
             return
 
+        # Confirm discard changes if leaving a dirty subtab (Item 21: Dirty Protection)
+        if self.active_subtab == "settings" and hasattr(self, "settings_editor"):
+            if not self.settings_editor.confirm_discard_changes():
+                return
+        elif self.active_subtab == "rules" and self._rules_editor is not None:
+            if not self._rules_editor.confirm_discard_changes():
+                return
+
         self.active_subtab = sub_id
 
         # Update button highlights

@@ -16,6 +16,7 @@ Does not own
 from __future__ import annotations
 
 import os
+import socket
 import sqlite3
 import urllib.error
 import urllib.request
@@ -256,21 +257,38 @@ class LocalOperatorInspector:
     def probe_market_data_provider(self, timeout: float = 3.0) -> bool:
         """Probe external market data provider connectivity without throwing."""
         endpoints = [
+            "https://fc.yahoo.com",
             "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI",
+            "https://query2.finance.yahoo.com/v8/finance/chart/%5ENSEI",
             "https://finance.yahoo.com",
         ]
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Accept": "*/*",
+        }
+        per_req_timeout = min(timeout, 2.0)
         for url in endpoints:
             try:
-                req = urllib.request.Request(
-                    url,
-                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PFETL/1.0"},
-                )
-                with urllib.request.urlopen(req, timeout=timeout) as resp:
+                req = urllib.request.Request(url, headers=headers)
+                with urllib.request.urlopen(req, timeout=per_req_timeout) as resp:
                     if resp.status in (200, 301, 302):
                         return True
             except urllib.error.HTTPError:
                 # An HTTP error response confirms network reachability to host
                 return True
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 continue
+
+        # Fallback TCP socket connection probe to port 443
+        hosts = ("query1.finance.yahoo.com", "query2.finance.yahoo.com", "finance.yahoo.com")
+        for host in hosts:
+            try:
+                with socket.create_connection((host, 443), timeout=per_req_timeout):
+                    return True
+            except Exception:  # pylint: disable=broad-exception-caught
+                continue
+
         return False
