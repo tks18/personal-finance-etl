@@ -1,6 +1,6 @@
 [project]
 name = "personal-finance-etl"
-version = "12.1.0"
+version = "12.1.2"
 description = "Local-first personal financial systems platform for investment accounting, reconciliation, tax evidence, wealth analytics, FIRE planning, and BI."
 authors = [
   { name="Shan", email="tksudharshan@gmail.com" },
@@ -108,3 +108,27 @@ Documentation = "https://github.com/tks18/personal-finance-etl"
 Repository = "https://github.com/tks18/personal-finance-etl"
 Issues = "https://github.com/tks18/personal-finance-etl/issues"
 Changelog = "https://github.com/tks18/personal-finance-etl/blob/master/CHANGELOG.md"
+
+[tool.project-forge]
+source = ["src"]
+tests = ["tests"]
+changelog = "CHANGELOG.md"
+
+[tool.project-forge.git]
+development_branch = "dev"
+default_branch = "master"
+
+[tool.project-forge.quality]
+fast = ["ruff-check", "ruff-format", "mypy"]
+full = ["ruff-check", "ruff-format", "mypy", "pyright", "pytest"]
+
+[tool.project-forge.bump]
+tag_prefix = ""
+files = ["pyproject.toml", "package.json", "src/personal_finance_etl/__init__.py", "version_info.txt"]
+commit_all = true
+changelog_file = "CHANGELOG.md"
+
+[tool.project-forge.commits]
+header_max_length = 72
+overrides_file = ".commit_overrides.json"
+
