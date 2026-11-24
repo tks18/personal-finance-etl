@@ -19,7 +19,7 @@ import queue
 import time
 from collections.abc import Callable
 from tkinter import messagebox
-from typing import Final
+from typing import Any, Final
 
 # Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: customtkinter lacks py.typed marker and complete stubs
 import customtkinter as ctk  # type: ignore[import-untyped]
@@ -29,6 +29,7 @@ from personal_finance_etl.contracts.observability import (
     ObservabilityEvent,
     PresentationKind,
 )
+from personal_finance_etl.presentation.desktop.state import OperationState
 from personal_finance_etl.presentation.desktop.theme import (
     LOG_TAG_COLORS,
     Color,
@@ -70,6 +71,7 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
         self._run_btn_text = "▶  Run"
         self.on_status_listener: Callable[[ObservabilityEvent], None] | None = None
         self.on_batch_status_listener: Callable[[list[ObservabilityEvent]], None] | None = None
+        self.app_state: Any | None = None
         self._event_queue: queue.Queue[tuple[ctk.CTkButton | None, ObservabilityEvent]] = (
             queue.Queue()
         )
@@ -258,6 +260,11 @@ class BaseEngineTab(ctk.CTkFrame):  # type: ignore[misc]
 
         if (run_complete or failure_event is not None) and last_btn is not None:
             last_btn.configure(state="normal", text=self._run_btn_text)
+            if hasattr(self, "app_state") and self.app_state is not None:
+                if failure_event is not None:
+                    self.app_state.set_operation(OperationState.FAILED, "Pipeline execution failed")
+                else:
+                    self.app_state.set_operation(OperationState.READY)
 
         if failure_event is not None:
             messagebox.showerror("Execution Failure", _build_failure_dialog_text(failure_event))
