@@ -5,46 +5,44 @@
 
 [tasks]
 
-dev = { cmd = "tkreload main.py", help = "Run desktop application in hot-reload development mode" }
-build = { cmd = "pyinstaller --clean -y main.spec", help = "Build standalone production binary using PyInstaller" }
+dev = { cmd = "uv run python -c \"from scripts.tasks import dev; dev()\"", help = "Run desktop application in hot-reload development mode" }
+build = { cmd = "uv run python -c \"from scripts.tasks import build; build()\"", help = "Build standalone production binary using PyInstaller" }
 
 # GitHub Release Management
-"release:preview" = { cmd = "pforge release preview", help = "Preview release notes for latest version in CHANGELOG.md" }
-"release:preview:all" = { cmd = "pforge release preview --all", help = "Preview full release notes for all versions in CHANGELOG.md" }
-"release:dry-run" = { cmd = "pforge release preview", help = "Display dry-run summary of matching Git tags and changelog entries" }
-"release:latest" = { cmd = "pforge release publish --latest", help = "Publish the latest version from CHANGELOG.md to GitHub" }
-"release:latest:draft" = { cmd = "pforge release publish --latest --draft", help = "Publish latest version as a GitHub draft release" }
-"release:all" = { cmd = "pforge release publish --interactive", help = "Publish all unreleased tags interactively to GitHub" }
-"release:all:draft" = { cmd = "pforge release publish --draft", help = "Publish all unreleased tags as GitHub drafts" }
-"release:pipeline" = { cmd = "pforge release pipeline", help = "Execute full post-release pipeline: git push (triggers audit) -> create PR -> draft release" }
-"release:flow" = { cmd = "pforge release flow", help = "Bump version automatically and execute full post-release pipeline" }
-"release:flow:patch" = { cmd = "pforge release flow --patch", help = "Bump patch version and execute full post-release pipeline" }
-"release:flow:minor" = { cmd = "pforge release flow --minor", help = "Bump minor version and execute full post-release pipeline" }
-"release:flow:major" = { cmd = "pforge release flow --major", help = "Bump major version and execute full post-release pipeline" }
-"pypi:publish" = { cmd = "pforge publish", help = "Build and publish package to PyPI using token from .env" }
+"release:preview" = { cmd = "uv run python -c \"from scripts.tasks import release_preview; release_preview()\"", help = "Preview release notes for latest version in CHANGELOG.md" }
+"release:preview:all" = { cmd = "uv run python -c \"from scripts.tasks import release_preview_all; release_preview_all()\"", help = "Preview full release notes for all versions in CHANGELOG.md" }
+"release:dry-run" = { cmd = "uv run python -c \"from scripts.tasks import release_dry_run; release_dry_run()\"", help = "Display dry-run summary of matching Git tags and changelog entries" }
+"release:latest" = { cmd = "uv run python -c \"from scripts.tasks import release_latest; release_latest()\"", help = "Publish the latest version from CHANGELOG.md to GitHub" }
+"release:latest:draft" = { cmd = "uv run python -c \"from scripts.tasks import release_latest_draft; release_latest_draft()\"", help = "Publish latest version as a GitHub draft release" }
+"release:all" = { cmd = "uv run python -c \"from scripts.tasks import release_all; release_all()\"", help = "Publish all unreleased tags interactively to GitHub" }
+"release:all:draft" = { cmd = "uv run python -c \"from scripts.tasks import release_all_draft; release_all_draft()\"", help = "Publish all unreleased tags as GitHub drafts" }
+"release:pipeline" = { cmd = "uv run python -c \"from scripts.tasks import release_pipeline; release_pipeline()\"", help = "Execute full post-release pipeline: git push (triggers audit) -> create PR -> draft release -> PyPI publish" }
+"pypi:publish" = { cmd = "uv run python -c \"from scripts.tasks import publish_pypi; sys.exit(publish_pypi())\"", help = "Build and publish package to PyPI using token from .env" }
 
 # GitHub Pull Request Management
-"pr:preview" = { cmd = "pforge pr preview", help = "Preview PR title, changelog, and attached Quality Gate certification table" }
-"pr:create" = { cmd = "pforge pr create", help = "Create or update PR from dev into master with Quality Gate certification" }
+"pr:preview" = { cmd = "uv run python -c \"from scripts.tasks import pr_preview; pr_preview()\"", help = "Preview PR title, changelog, and attached Quality Gate certification table" }
+"pr:create" = { cmd = "uv run python -c \"from scripts.tasks import pr_create; pr_create()\"", help = "Create or update PR from dev into master with Quality Gate certification" }
 
 # Quality Gate & Diagnostics Tasks
-audit = { cmd = "pforge quality", help = "Run Full Quality Gate (Ruff, Mypy, Pyright, Pylint, Pytest)" }
-audit-fast = { cmd = "pforge quality --fast", help = "Run Fast Quality Gate (< 2s: Ruff Lint, Ruff Format, Mypy)" }
-"audit-fast:fix" = { cmd = "pforge quality --fast --fix", help = "Run Fast Quality Gate with automatic Ruff lint and format fixing" }
-audit-full = { cmd = "pforge quality", help = "Run Full Quality Gate (all configured engines: Ruff, Mypy, Pyright, Pytest)" }
-audit-csv = { cmd = "pforge quality --export-csv", help = "Run Full Quality Gate and export structured CSV report" }
-audit-json = { cmd = "pforge quality --export-json", help = "Run Full Quality Gate and export structured JSON report" }
-audit-docs = { cmd = "pforge docs audit", help = "Run AST-level documentation compliance auditor" }
+audit = { cmd = "uv run python -c \"from scripts.tasks import audit; audit()\"", help = "Run Full Quality Gate (Ruff, Mypy, Pyright, Pylint, Pytest)" }
+audit-fast = { cmd = "uv run python -c \"from scripts.tasks import audit_fast; audit_fast()\"", help = "Run Fast Quality Gate (< 2s: Ruff Lint, Ruff Format, Mypy)" }
+"audit-fast:fix" = { cmd = "uv run python -c \"from scripts.tasks import audit_fast_fix; audit_fast_fix()\"", help = "Run Fast Quality Gate with automatic Ruff lint and format fixing" }
+audit-full = { cmd = "uv run python -c \"from scripts.tasks import audit_full; audit_full()\"", help = "Run Full Quality Gate (all 6 engines: Ruff, Mypy, Pyright, Pylint, Pytest)" }
+audit-csv = { cmd = "uv run python -c \"from scripts.tasks import audit_csv; audit_csv()\"", help = "Run Full Quality Gate and export structured CSV report" }
+audit-json = { cmd = "uv run python -c \"from scripts.tasks import audit_json; audit_json()\"", help = "Run Full Quality Gate and export structured JSON report" }
+audit-docs = { cmd = "uv run python scripts/audit_documentation.py", help = "Run AST-level documentation compliance auditor" }
 
 # Git Hooks Orchestration
-install-hooks = { cmd = "pforge hooks install", help = "Install Git pre-commit and pre-push quality hooks" }
+install-hooks = { cmd = "uv run python -c \"from scripts.tasks import install_hooks; install_hooks()\"", help = "Install Git pre-commit and pre-push quality hooks" }
 
 # Automated Conventional Commits
-commit = { cmd = "pforge commit", help = "Run automated Conventional Commit tool (supports flags: -i/--interactive, --run, --dry-run, --map, --file)" }
-"commit:preview" = { cmd = "pforge commit --preview", help = "Preview automated Conventional Commits without staging or committing (dry-run)" }
-"commit:run" = { cmd = "pforge commit --run", help = "Execute automated Conventional Commits file-by-file immediately without prompting" }
-"commit:interactive" = { cmd = "pforge commit --interactive", help = "Interactive file-by-file Commitlint wizard with diff inspection and prompt choices" }
-"commit:i" = { cmd = "pforge commit --interactive", help = "Interactive file-by-file Commitlint wizard (alias for commit:interactive)" }
-"commit:overrides" = { cmd = "pforge commit --map .commit_overrides.json --run", help = "Execute automated commits directly using .commit_overrides.json" }
-"commit:overrides:preview" = { cmd = "pforge commit --map .commit_overrides.json --preview", help = "Preview automated commits using .commit_overrides.json without staging (dry-run)" }
-"commit:overrides:only" = { cmd = "pforge commit --map .commit_overrides.json --only-mapped --run", help = "Execute commits ONLY for files explicitly defined in .commit_overrides.json" }
+commit = { cmd = "uv run python -c \"from scripts.tasks import commit; commit()\"", help = "Run automated Conventional Commit tool (supports flags: -i/--interactive, --run, --dry-run, --map, --file)" }
+"commit:preview" = { cmd = "uv run python -c \"from scripts.tasks import commit_preview; commit_preview()\"", help = "Preview automated Conventional Commits without staging or committing (dry-run)" }
+"commit:run" = { cmd = "uv run python -c \"from scripts.tasks import commit_run; commit_run()\"", help = "Execute automated Conventional Commits file-by-file immediately without prompting" }
+"commit:interactive" = { cmd = "uv run python -c \"from scripts.tasks import commit_interactive; commit_interactive()\"", help = "Interactive file-by-file Commitlint wizard with diff inspection and prompt choices" }
+"commit:i" = { cmd = "uv run python -c \"from scripts.tasks import commit_interactive; commit_interactive()\"", help = "Interactive file-by-file Commitlint wizard (alias for commit:interactive)" }
+"commit:overrides" = { cmd = "uv run python -c \"from scripts.tasks import commit_overrides; commit_overrides()\"", help = "Execute automated commits directly using .commit_overrides.json" }
+"commit:overrides:preview" = { cmd = "uv run python -c \"from scripts.tasks import commit_overrides_preview; commit_overrides_preview()\"", help = "Preview automated commits using .commit_overrides.json without staging (dry-run)" }
+"commit:overrides:only" = { cmd = "uv run python -c \"from scripts.tasks import commit_overrides_only; commit_overrides_only()\"", help = "Execute commits ONLY for files explicitly defined in .commit_overrides.json" }
+
+
