@@ -29,8 +29,9 @@ from personal_finance_etl.contracts.observability import (
     ObservabilityEvent,
     PresentationKind,
 )
+from personal_finance_etl.presentation.desktop.background_tasks import get_background_runner
 from personal_finance_etl.presentation.desktop.base_tab import BaseEngineTab
-from personal_finance_etl.presentation.desktop.state import AppState
+from personal_finance_etl.presentation.desktop.state import AppState, OperationState
 from personal_finance_etl.presentation.desktop.theme import Color
 
 __all__ = ["RunTab"]
@@ -77,6 +78,7 @@ class RunTab(BaseEngineTab):
         if self.app_state is not None:
             self.app_state.subscribe_config(self._on_external_config_changed)
             self.app_state.subscribe_rules(self._on_external_rules_changed)
+            self.app_state.subscribe_operation(self._on_operation_changed)
 
     def _on_external_config_changed(self, path: str, source: Any) -> None:
         """Handle active config update originating from another tab or state."""
@@ -419,8 +421,42 @@ class RunTab(BaseEngineTab):
                 if self.app_state is not None:
                     self.app_state.set_active_rules(path, source=self)
 
+    def _on_operation_changed(self, state: OperationState, _message: str) -> None:
+        """Update button enablement based on AppState operational lifecycle state."""
+        busy = self.app_state.is_busy() if self.app_state else False
+        can_run = self.app_state.can_run_pipeline() if self.app_state else True
+        can_snap = self.app_state.can_snapshot() if self.app_state else True
+        can_rest = self.app_state.can_restore() if self.app_state else True
+
+        if hasattr(self, "run_btn") and self.run_btn.winfo_exists():
+            if state == OperationState.PIPELINE_RUNNING:
+                self.run_btn.configure(state="disabled", text="Running...")
+            else:
+                self.run_btn.configure(
+                    state="normal" if can_run and not busy else "disabled",
+                    text=self._run_btn_text,
+                )
+        if hasattr(self, "snapshot_btn") and self.snapshot_btn.winfo_exists():
+            if state == OperationState.SNAPSHOTTING:
+                self.snapshot_btn.configure(state="disabled", text="Snapshotting...")
+            else:
+                self.snapshot_btn.configure(
+                    state="normal" if can_snap and not busy else "disabled",
+                    text="📸  Take Snapshot",
+                )
+        if hasattr(self, "restore_btn") and self.restore_btn.winfo_exists():
+            if state == OperationState.RESTORING:
+                self.restore_btn.configure(state="disabled", text="Restoring...")
+            else:
+                self.restore_btn.configure(
+                    state="normal" if can_rest and not busy else "disabled",
+                    text="🔄  Restore Backup",
+                )
+
     def _start_pipeline(self) -> None:
         """Initiate asynchronous pipeline execution from the desktop UI tab."""
+        if self.app_state is not None:
+            self.app_state.set_operation(OperationState.PIPELINE_RUNNING, "Pipeline running...")
         self.run_btn.configure(state="disabled", text="Running...")
         self._clear_console()
 
@@ -431,9 +467,20 @@ class RunTab(BaseEngineTab):
         )
 
     def _snapshot_db(self) -> None:
-        """Trigger an instant database snapshot backup from the desktop UI tab."""
-        try:
-            snap_path = self.engine.snapshot_database(self.config_path_var.get())
+        """Trigger an instant database snapshot backup asynchronously."""
+        cfg_path = self.config_path_var.get()
+        if not cfg_path:
+            return
+
+        if self.app_state is not None:
+            self.app_state.set_operation(
+                OperationState.SNAPSHOTTING, "Creating database snapshot..."
+            )
+
+        def _worker() -> str | None:
+            return self.engine.snapshot_database(cfg_path)
+
+        def _on_success(snap_path: str | None) -> None:
             if snap_path:
                 self.handle_status(
                     self.run_btn,
@@ -446,6 +493,8 @@ class RunTab(BaseEngineTab):
                         presentation_kind=PresentationKind.SUCCESS,
                     ),
                 )
+                if self.app_state is not None:
+                    self.app_state.set_operation(OperationState.READY)
             else:
                 self.handle_status(
                     self.run_btn,
@@ -458,21 +507,40 @@ class RunTab(BaseEngineTab):
                         presentation_kind=PresentationKind.FAILURE,
                     ),
                 )
-        except Exception as e:
+                if self.app_state is not None:
+                    self.app_state.set_operation(
+                        OperationState.ATTENTION, "Snapshot skipped: Database not found"
+                    )
+
+        def _on_error(exc: Exception) -> None:
             self.handle_status(
                 self.run_btn,
                 ObservabilityEvent.create(
                     event_code=EventCode.RECOVERY_SNAPSHOT,
-                    message=f"Failed to create snapshot: {e}",
+                    message=f"Failed to create snapshot: {exc}",
                     progress=0.0,
                     severity=DiagnosticSeverity.ERROR,
                     outcome=EventOutcome.FAILED,
                     presentation_kind=PresentationKind.FAILURE,
                 ),
             )
+            if self.app_state is not None:
+                self.app_state.set_operation(OperationState.FAILED, f"Snapshot failed: {exc}")
+
+        def _on_finally() -> None:
+            if hasattr(self, "snapshot_btn") and self.snapshot_btn.winfo_exists():
+                self.snapshot_btn.configure(state="normal", text="📸  Take Snapshot")
+
+        get_background_runner().run(
+            _worker,
+            on_success=_on_success,
+            on_error=_on_error,
+            on_finally=_on_finally,
+            parent_widget=self,
+        )
 
     def _restore_db(self) -> None:
-        """Prompt user for snapshot archive and initiate database restoration."""
+        """Prompt user for snapshot archive and initiate database restoration asynchronously."""
         zip_path = filedialog.askopenfilename(
             title="Select Snapshot ZIP",
             filetypes=[("Zip files", "*.zip")],
@@ -480,21 +548,14 @@ class RunTab(BaseEngineTab):
         if not zip_path:
             return
 
-        self.run_btn.configure(state="disabled")
-        self.snapshot_btn.configure(state="disabled")
-        self.restore_btn.configure(state="disabled", text="Restoring...")
+        cfg_path = self.config_path_var.get()
+        if self.app_state is not None:
+            self.app_state.set_operation(OperationState.RESTORING, "Restoring database backup...")
 
-        try:
-            self._execute_restore(zip_path)
-        finally:
-            self.run_btn.configure(state="normal")
-            self.snapshot_btn.configure(state="normal")
-            self.restore_btn.configure(state="normal", text="♻ Restore")
+        def _worker() -> bool:
+            return self.engine.restore_database(cfg_path, zip_path)
 
-    def _execute_restore(self, zip_path: str) -> None:
-        """Execute database restore and propagate status messages."""
-        try:
-            success = self.engine.restore_database(self.config_path_var.get(), zip_path)
+        def _on_success(success: bool) -> None:
             msg = (
                 "Database snapshot restored successfully."
                 if success
@@ -513,27 +574,35 @@ class RunTab(BaseEngineTab):
                     ),
                 ),
             )
-        except PermissionError as pe:
+            if self.app_state is not None:
+                if success:
+                    self.app_state.set_operation(OperationState.READY)
+                else:
+                    self.app_state.set_operation(OperationState.RECOVERY_REQUIRED, "Restore failed")
+
+        def _on_error(exc: Exception) -> None:
             self.handle_status(
                 self.run_btn,
                 ObservabilityEvent.create(
                     event_code=EventCode.RECOVERY_RESTORE,
-                    message=str(pe),
+                    message=f"Unexpected error restoring snapshot: {exc}",
                     progress=0.0,
                     severity=DiagnosticSeverity.ERROR,
                     outcome=EventOutcome.FAILED,
                     presentation_kind=PresentationKind.FAILURE,
                 ),
             )
-        except Exception as e:
-            self.handle_status(
-                self.run_btn,
-                ObservabilityEvent.create(
-                    event_code=EventCode.RECOVERY_RESTORE,
-                    message=f"Unexpected error restoring snapshot: {e}",
-                    progress=0.0,
-                    severity=DiagnosticSeverity.ERROR,
-                    outcome=EventOutcome.FAILED,
-                    presentation_kind=PresentationKind.FAILURE,
-                ),
-            )
+            if self.app_state is not None:
+                self.app_state.set_operation(OperationState.FAILED, f"Restore failed: {exc}")
+
+        def _on_finally() -> None:
+            if hasattr(self, "restore_btn") and self.restore_btn.winfo_exists():
+                self.restore_btn.configure(state="normal", text="🔄  Restore Backup")
+
+        get_background_runner().run(
+            _worker,
+            on_success=_on_success,
+            on_error=_on_error,
+            on_finally=_on_finally,
+            parent_widget=self,
+        )
