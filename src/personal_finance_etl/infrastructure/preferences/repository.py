@@ -128,3 +128,35 @@ class PreferencesManager:
             return []
         items = cast(list[object], raw)
         return [str(p) for p in items if isinstance(p, str) and os.path.exists(p)]
+
+    def get_ui_preferences(self) -> dict[str, object]:
+        """Return the dictionary of persisted presentation UI preferences.
+
+        Returns
+        -------
+        dict[str, object]
+            Persisted presentation preferences dictionary.
+        """
+        data = self._read_data()
+        raw = data.get("ui_preferences", {})
+        if isinstance(raw, dict):
+            typed_raw = cast("dict[str, object]", raw)
+            return dict(typed_raw)
+        return {}
+
+    def save_ui_preferences(self, preferences: Mapping[str, object]) -> None:
+        """Safely persist presentation UI preferences.
+
+        Parameters
+        ----------
+        preferences : Mapping[str, object]
+            Key-value pairs of UI preferences to merge and persist.
+        """
+        data = self._read_data()
+        existing = data.get("ui_preferences", {})
+        merged: dict[str, object] = (
+            dict(cast("dict[str, object]", existing)) if isinstance(existing, dict) else {}
+        )
+        merged.update(preferences)
+        data["ui_preferences"] = merged
+        self._write_data(data)

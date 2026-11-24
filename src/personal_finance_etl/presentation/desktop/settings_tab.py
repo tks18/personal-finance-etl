@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from typing import Any
 
 # Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: customtkinter lacks py.typed marker and complete stubs
@@ -29,7 +29,7 @@ from tomlkit.toml_document import TOMLDocument
 from personal_finance_etl.application.facade import PersonalFinanceEngine
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.presentation.desktop.config_editor import ConfigFieldEditor
-from personal_finance_etl.presentation.desktop.state import AppState
+from personal_finance_etl.presentation.desktop.state import AppState, OperationState
 from personal_finance_etl.presentation.desktop.theme import Color
 
 __all__ = ["SettingsTab"]
@@ -65,6 +65,7 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
         self.original_doc: TOMLDocument | None = None
         self.active_settings: Settings = Settings()
         self.editors: dict[str, dict[str, ConfigFieldEditor]] = {}
+        self._initial_state: dict[str, Any] = {}
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=0)  # Toolbar
@@ -78,6 +79,7 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
         # Subscribe to central AppState changes
         if self.app_state is not None:
             self.app_state.subscribe_config(self._on_external_config_changed)
+            self.app_state.subscribe_operation(self._on_operation_changed)
             initial_path = self.app_state.active_config_path
         else:
             recents = self.engine.get_recent_configs()
@@ -128,7 +130,7 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
         self.cfg_combo.grid(row=0, column=1, sticky="ew", padx=(0, 8), pady=8)
 
         # Browse Button
-        ctk.CTkButton(
+        self.browse_btn = ctk.CTkButton(
             toolbar_card,
             text="Browse…",
             width=72,
@@ -140,10 +142,11 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
             border_color=Color.BORDER,
             corner_radius=5,
             command=self._on_browse,
-        ).grid(row=0, column=2, padx=(0, 6), pady=8)
+        )
+        self.browse_btn.grid(row=0, column=2, padx=(0, 6), pady=8)
 
         # Reload Button
-        ctk.CTkButton(
+        self.reload_btn = ctk.CTkButton(
             toolbar_card,
             text="↻ Reload",
             width=72,
@@ -155,7 +158,8 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
             border_color=Color.BORDER,
             corner_radius=5,
             command=self.reload_config,
-        ).grid(row=0, column=3, padx=(0, 6), pady=8)
+        )
+        self.reload_btn.grid(row=0, column=3, padx=(0, 6), pady=8)
 
         # Validate Paths Button
         ctk.CTkButton(
@@ -173,7 +177,7 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
         ).grid(row=0, column=4, padx=(0, 6), pady=8)
 
         # Save As Button
-        ctk.CTkButton(
+        self.save_as_btn = ctk.CTkButton(
             toolbar_card,
             text="Save As…",
             width=78,
@@ -185,7 +189,8 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
             border_color=Color.BORDER,
             corner_radius=5,
             command=self.save_config_as,
-        ).grid(row=0, column=5, padx=(0, 8), pady=8)
+        )
+        self.save_as_btn.grid(row=0, column=5, padx=(0, 8), pady=8)
 
         # Save Button
         self.save_btn = ctk.CTkButton(
@@ -310,6 +315,45 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
             for f_name, editor in field_dict.items():
                 if hasattr(submodel, f_name):
                     editor.set_value(getattr(submodel, f_name))
+        self._initial_state = self._snapshot_current_values()
+
+    def _on_operation_changed(self, _state: OperationState, _message: str) -> None:
+        """Disable mutation actions when pipeline or backup operations are active."""
+        busy = self.app_state.is_busy() if self.app_state else False
+        if hasattr(self, "save_btn") and self.save_btn.winfo_exists():
+            self.save_btn.configure(state="disabled" if busy else "normal")
+        if hasattr(self, "save_as_btn") and self.save_as_btn.winfo_exists():
+            self.save_as_btn.configure(state="disabled" if busy else "normal")
+        if hasattr(self, "reload_btn") and self.reload_btn.winfo_exists():
+            self.reload_btn.configure(state="disabled" if busy else "normal")
+
+    def _snapshot_current_values(self) -> dict[str, Any]:
+        """Capture current field editor values into a key-value snapshot dictionary."""
+        snapshot: dict[str, Any] = {}
+        for sec_name, field_dict in self.editors.items():
+            for f_name, editor in field_dict.items():
+                snapshot[f"{sec_name}.{f_name}"] = editor.get_value()
+        return snapshot
+
+    def is_dirty(self) -> bool:
+        """Whether current in-memory form values diverge from loaded baseline snapshot."""
+        if not self._initial_state:
+            return False
+        return self._snapshot_current_values() != self._initial_state
+
+    def confirm_discard_changes(self) -> bool:
+        """Prompt confirmation if unsaved changes exist (Item 21: Dirty Protection)."""
+        if not self.is_dirty():
+            return True
+        res = messagebox.askyesnocancel(
+            "Unsaved Changes",
+            "You have unsaved changes in Settings.\n\nDo you want to save your changes before proceeding?",
+        )
+        if res is True:
+            return self.save_config()
+        if res is False:
+            return True
+        return False
 
     def _on_external_config_changed(self, path: str, source: Any) -> None:
         """Handle active config update originating from another tab or state."""
@@ -320,6 +364,10 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
 
     def _on_combo_select(self, path: str) -> None:
         """Handle user selection from the configuration dropdown."""
+        if not self.confirm_discard_changes():
+            if self.current_filepath:
+                self.config_path_var.set(self.current_filepath)
+            return
         self.load_config(path, notify_state=True)
 
     def ensure_config_loaded(self, filepath: str) -> None:
@@ -352,12 +400,16 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
 
     def reload_config(self) -> None:
         """Reload configuration from disk for current file."""
+        if not self.confirm_discard_changes():
+            return
         target = self.current_filepath or self.config_path_var.get()
         if target:
             self.load_config(target, notify_state=False)
 
     def _on_browse(self) -> None:
         """Open file dialog to pick an existing TOML configuration."""
+        if not self.confirm_discard_changes():
+            return
         chosen = filedialog.askopenfilename(
             title="Select Configuration TOML",
             filetypes=[("TOML files", "*.toml"), ("All files", "*.*")],
@@ -382,15 +434,36 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
         return Settings.model_validate(payload)
 
     def save_config(self) -> bool:
-        """Validate UI values and atomically persist to current file path."""
+        """Validate UI values and atomically persist to current file path (Item 21 & 22)."""
         target_path = self.current_filepath or self.config_path_var.get()
         if not target_path:
             return self.save_config_as()
 
+        # Clear any prior validation error highlights
+        for field_dict in self.editors.values():
+            for ed in field_dict.values():
+                ed.clear_error()
+
         try:
             validated = self.gather_settings_from_ui()
         except ValidationError as ve:
-            self._show_banner(f"Validation Error: {ve}", is_error=True)
+            error_count = len(ve.errors())
+            for err in ve.errors():
+                loc = err.get("loc", ())
+                msg = str(err.get("msg", "Invalid value"))
+                if len(loc) >= 2:
+                    sec_name, field_name = str(loc[0]), str(loc[1])
+                    if sec_name in self.editors and field_name in self.editors[sec_name]:
+                        self.editors[sec_name][field_name].set_error(msg)
+                elif len(loc) == 1:
+                    field_name = str(loc[0])
+                    for sec_dict in self.editors.values():
+                        if field_name in sec_dict:
+                            sec_dict[field_name].set_error(msg)
+            self._show_banner(
+                f"Validation failed: {error_count} error(s) found. Please correct highlighted fields.",
+                is_error=True,
+            )
             return False
         except Exception as e:
             self._show_banner(f"Input Parsing Error: {e}", is_error=True)
@@ -402,6 +475,7 @@ class SettingsTab(ctk.CTkFrame):  # type: ignore[misc]
             )
             self.current_filepath = target_path
             self.active_settings = validated
+            self._initial_state = self._snapshot_current_values()
             self._refresh_recents_dropdown()
             self._show_banner(
                 f"✓ Settings saved successfully to '{Path(target_path).name}'", is_error=False

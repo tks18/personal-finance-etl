@@ -21,7 +21,7 @@ import os
 import customtkinter as ctk  # type: ignore[import-untyped]
 from PIL import Image
 
-from personal_finance_etl.application.facade import PersonalFinanceEngine
+from personal_finance_etl.bootstrap.container import ServiceContainer
 from personal_finance_etl.contracts.observability import ObservabilityEvent
 from personal_finance_etl.infrastructure.filesystem.paths import resource_path
 from personal_finance_etl.presentation.desktop.configuration_tab import ConfigurationTab
@@ -29,7 +29,7 @@ from personal_finance_etl.presentation.desktop.financial_rules_tab import Financ
 from personal_finance_etl.presentation.desktop.logs_tab import LogsTab
 from personal_finance_etl.presentation.desktop.run_tab import RunTab
 from personal_finance_etl.presentation.desktop.settings_tab import SettingsTab
-from personal_finance_etl.presentation.desktop.state import AppState
+from personal_finance_etl.presentation.desktop.state import AppState, OperationState
 from personal_finance_etl.presentation.desktop.system_tab import SystemTab
 from personal_finance_etl.presentation.desktop.theme import Color
 
@@ -55,7 +55,6 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
     def __init__(self) -> None:
         super().__init__()
         self.title("Personal Finance ETL")
-        self.geometry("1020x740")
         self.minsize(840, 580)
         self.configure(fg_color=Color.BG)
 
@@ -63,8 +62,19 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
         if os.path.exists(icon_path):
             self.after(200, lambda: self.iconbitmap(icon_path))
 
-        self.engine = PersonalFinanceEngine()
+        self.engine = ServiceContainer().create_engine()
         self.app_state = AppState(self.engine)
+
+        # Restore window geometry preference safely
+        ui_prefs = self.engine.get_ui_preferences()
+        saved_geom = ui_prefs.get("window_geometry")
+        if isinstance(saved_geom, str) and "x" in saved_geom:
+            try:
+                self.geometry(saved_geom)
+            except Exception:
+                self.geometry("1020x740")
+        else:
+            self.geometry("1020x740")
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=0)  # Top Navigation Header
@@ -75,6 +85,11 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
 
         self._build_top_header()
         self._build_content_views()
+        self._setup_shortcuts()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Restore presentation preferences
+        self._restore_presentation_preferences(ui_prefs)
 
     def _build_top_header(self) -> None:
         """Construct the full-width app header containing branding, tab navigation, and status."""
@@ -89,7 +104,7 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
         brand_frame.grid(row=0, column=0, padx=(16, 24), pady=10, sticky="w")
 
         logo_path = resource_path("presentation/assets/logo.png")
-        if os.path.exists(logo_path):
+        if os.path.exists(logo_path) and not os.environ.get("PYTEST_CURRENT_TEST"):
             img = ctk.CTkImage(dark_image=Image.open(logo_path), size=(28, 28))
             ctk.CTkLabel(brand_frame, image=img, text="").pack(side="left", padx=(0, 10))
 
@@ -145,14 +160,16 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
         status_frame = ctk.CTkFrame(header, fg_color="transparent")
         status_frame.grid(row=0, column=2, padx=(0, 16), pady=10, sticky="e")
 
-        ctk.CTkLabel(
+        self.status_badge = ctk.CTkLabel(
             status_frame,
-            text="● Engine Ready",
+            text="● Ready",
             font=ctk.CTkFont(family="Segoe UI", size=10),
             text_color="#4ADE80",
             fg_color="#062817",
             corner_radius=4,
-        ).pack(side="right", ipady=2, ipadx=8)
+        )
+        self.status_badge.pack(side="right", ipady=2, ipadx=8)
+        self.app_state.subscribe_operation(self._on_operation_changed)
 
         # ── 4. Bottom Divider ────────────────────────────────────
         divider = ctk.CTkFrame(self, fg_color="#1E293B", height=1, corner_radius=0)
@@ -289,6 +306,126 @@ class DesktopApp(ctk.CTk):  # type: ignore[misc]
             tab = self.system_tab
             tab.grid(row=0, column=0, sticky="nsew")
             tab.ensure_loaded()
+
+    def _on_operation_changed(self, state: OperationState, _message: str) -> None:
+        """Update top-right header status badge based on AppState operation changes."""
+        spec: dict[OperationState, tuple[str, str, str]] = {
+            OperationState.READY: ("● Ready", "#4ADE80", "#062817"),
+            OperationState.PIPELINE_RUNNING: ("● Running Pipeline...", "#818CF8", "#1E1B4B"),
+            OperationState.CHECKING: ("● Checking System...", "#38BDF8", "#083344"),
+            OperationState.SNAPSHOTTING: ("● Creating Snapshot...", "#F59E0B", "#451A03"),
+            OperationState.RESTORING: ("● Restoring Backup...", "#F59E0B", "#451A03"),
+            OperationState.ATTENTION: ("● Attention Needed", "#F59E0B", "#451A03"),
+            OperationState.RECOVERY_REQUIRED: ("● Recovery Required", "#EF4444", "#450A0A"),
+            OperationState.FAILED: ("● Operation Failed", "#EF4444", "#450A0A"),
+        }
+        text, text_col, fg_col = spec.get(state, ("● Unknown", "#94A3B8", "#1E293B"))
+        if hasattr(self, "status_badge") and self.status_badge.winfo_exists():
+            self.status_badge.configure(text=text, text_color=text_col, fg_color=fg_col)
+
+    def _restore_presentation_preferences(self, ui_prefs: dict[str, object]) -> None:
+        """Restore harmless presentation preferences safely."""
+        last_tab = ui_prefs.get("active_tab")
+        if isinstance(last_tab, str) and last_tab in ("run", "config", "logs", "system"):
+            self.switch_tab(last_tab)
+
+        last_cfg_sub = ui_prefs.get("config_subtab")
+        if isinstance(last_cfg_sub, str) and last_cfg_sub in ("settings", "rules"):
+            if self._config_tab is not None:
+                self.config_tab.switch_subtab(last_cfg_sub)
+
+        last_rules_domain = ui_prefs.get("rules_domain")
+        if isinstance(last_rules_domain, str) and self._config_tab is not None:
+            if hasattr(self.config_tab, "rules_editor"):
+                self.config_tab.rules_editor.switch_subtab(last_rules_domain)
+
+        filters = ui_prefs.get("forensic_filters")
+        if isinstance(filters, dict) and self._logs_tab is not None:
+            self.logs_tab.apply_preferences(ui_prefs)
+
+    def _setup_shortcuts(self) -> None:
+        """Bind high-value keyboard shortcuts for power operators."""
+        self.bind_all("<Control-s>", self._on_shortcut_save)
+        self.bind_all("<Control-S>", self._on_shortcut_save_as)
+        self.bind_all("<Control-Shift-s>", self._on_shortcut_save_as)
+        self.bind_all("<Control-Shift-S>", self._on_shortcut_save_as)
+        self.bind_all("<Control-f>", self._on_shortcut_find)
+        self.bind_all("<Control-r>", self._on_shortcut_refresh)
+        self.bind_all("<Escape>", self._on_shortcut_escape)
+
+    def _on_shortcut_save(self, _event: object = None) -> str:
+        """Ctrl+S: Save active Settings or Financial Rules editor."""
+        if self.active_tab_id == "config" and self._config_tab is not None:
+            if self._config_tab.active_subtab == "settings":
+                self._config_tab.settings_editor.save_config()
+            elif self._config_tab.active_subtab == "rules":
+                self._config_tab.rules_editor._on_save()
+        return "break"
+
+    def _on_shortcut_save_as(self, _event: object = None) -> str:
+        """Ctrl+Shift+S: Save As on active Settings or Financial Rules editor."""
+        if self.active_tab_id == "config" and self._config_tab is not None:
+            if self._config_tab.active_subtab == "settings":
+                self._config_tab.settings_editor.save_config_as()
+            elif self._config_tab.active_subtab == "rules":
+                self._config_tab.rules_editor._on_save_as()
+        return "break"
+
+    def _on_shortcut_find(self, _event: object = None) -> str:
+        """Ctrl+F: Focus forensic search when Forensic Logs view is active."""
+        if self.active_tab_id != "logs":
+            self.switch_tab("logs")
+        if self._logs_tab is not None:
+            self._logs_tab.focus_search()
+        return "break"
+
+    def _on_shortcut_refresh(self, _event: object = None) -> str:
+        """Ctrl+R: Refresh current System view or selected trace where safe."""
+        if self.active_tab_id == "system" and self._system_tab is not None:
+            self._system_tab.refresh_status()
+        elif self.active_tab_id == "logs" and self._logs_tab is not None:
+            self._logs_tab.refresh_runs()
+        return "break"
+
+    def _on_shortcut_escape(self, _event: object = None) -> str:
+        """Esc: Clear search filter in Forensic Logs or unfocus entries."""
+        if self.active_tab_id == "logs" and self._logs_tab is not None:
+            self._logs_tab.clear_search()
+        self.focus_set()
+        return "break"
+
+    def _on_close(self) -> None:
+        """Safely intercept window close to confirm dirty editors and persist preferences."""
+        if self._config_tab is not None:
+            if (
+                hasattr(self._config_tab, "settings_editor")
+                and self._config_tab.settings_editor.is_dirty()
+            ):
+                if not self._config_tab.settings_editor.confirm_discard_changes():
+                    return
+            if (
+                hasattr(self._config_tab, "rules_editor")
+                and self._config_tab.rules_editor.is_dirty()
+            ):
+                if not self._config_tab.rules_editor.confirm_discard_changes():
+                    return
+
+        try:
+            prefs: dict[str, object] = {
+                "window_geometry": self.geometry(),
+                "active_tab": self.active_tab_id,
+            }
+            if self._config_tab is not None:
+                prefs["config_subtab"] = self._config_tab.active_subtab
+                if hasattr(self._config_tab, "rules_editor"):
+                    prefs["rules_domain"] = self._config_tab.rules_editor.active_subtab_id
+            if self._logs_tab is not None:
+                prefs["forensic_filters"] = self._logs_tab.get_filter_preferences()
+            self.engine.save_ui_preferences(prefs)
+        except Exception:
+            pass
+
+        self.destroy()
 
 
 def main() -> None:

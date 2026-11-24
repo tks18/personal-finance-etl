@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from pathlib import Path
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 from typing import Any
 
 # Exception TYP-003 [THIRD_PARTY_TYPING_GAP]: customtkinter lacks py.typed marker and complete stubs
@@ -43,7 +43,7 @@ from personal_finance_etl.presentation.desktop.rules_editors import (
     InvestmentInstrumentsEditor,
     TaxHeadSectionEditor,
 )
-from personal_finance_etl.presentation.desktop.state import AppState
+from personal_finance_etl.presentation.desktop.state import AppState, OperationState
 from personal_finance_etl.presentation.desktop.theme import Color
 
 __all__ = [
@@ -54,7 +54,7 @@ __all__ = [
 ]
 
 
-class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
+class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]  # pylint: disable=too-many-instance-attributes
     """Visual rules editor tab for reviewing and modifying financial rules TOML files."""
 
     def __init__(
@@ -80,6 +80,7 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
         self.subtab_frames: dict[str, ctk.CTkScrollableFrame] = {}
         self.active_subtab_id: str = "household"
         self._rendered_subtabs: set[str] = set()
+        self._initial_payload: dict[str, Any] = {}
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=0)  # Toolbar
@@ -94,6 +95,7 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
 
         if self.app_state is not None:
             self.app_state.subscribe_rules(self._on_external_rules_changed)
+            self.app_state.subscribe_operation(self._on_operation_changed)
             initial_path = self.app_state.active_rules_path
         else:
             recents = self.engine.get_recent_rules()
@@ -150,7 +152,7 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
         btn_bar = ctk.CTkFrame(toolbar_card, fg_color="transparent")
         btn_bar.grid(row=0, column=2, sticky="e", padx=(8, 10), pady=8)
 
-        ctk.CTkButton(
+        self.browse_btn = ctk.CTkButton(
             btn_bar,
             text="Browse...",
             font=ctk.CTkFont(family="Segoe UI", size=11),
@@ -159,9 +161,10 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
             height=32,
             width=75,
             command=self._on_browse_file,
-        ).pack(side="left", padx=3)
+        )
+        self.browse_btn.pack(side="left", padx=3)
 
-        ctk.CTkButton(
+        self.reload_btn = ctk.CTkButton(
             btn_bar,
             text="↻ Reload",
             font=ctk.CTkFont(family="Segoe UI", size=11),
@@ -170,9 +173,10 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
             height=32,
             width=75,
             command=self._on_reload,
-        ).pack(side="left", padx=3)
+        )
+        self.reload_btn.pack(side="left", padx=3)
 
-        ctk.CTkButton(
+        self.validate_btn = ctk.CTkButton(
             btn_bar,
             text="🔍 Validate",
             font=ctk.CTkFont(family="Segoe UI", size=11),
@@ -181,9 +185,10 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
             height=32,
             width=80,
             command=self._on_validate_clicked,
-        ).pack(side="left", padx=3)
+        )
+        self.validate_btn.pack(side="left", padx=3)
 
-        ctk.CTkButton(
+        self.save_as_btn = ctk.CTkButton(
             btn_bar,
             text="Save As...",
             font=ctk.CTkFont(family="Segoe UI", size=11),
@@ -192,9 +197,10 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
             height=32,
             width=78,
             command=self._on_save_as,
-        ).pack(side="left", padx=3)
+        )
+        self.save_as_btn.pack(side="left", padx=3)
 
-        ctk.CTkButton(
+        self.save_btn = ctk.CTkButton(
             btn_bar,
             text="💾 Save Rules",
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
@@ -203,7 +209,8 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
             height=32,
             width=100,
             command=self._on_save,
-        ).pack(side="left", padx=(3, 0))
+        )
+        self.save_btn.pack(side="left", padx=(3, 0))
 
     # ── Subtab Navigation ────────────────────────────────────────
 
@@ -741,6 +748,7 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
             # Render ONLY active subtab on demand
             self._populate_subtab(self.active_subtab_id, rules)
             self._rendered_subtabs.add(self.active_subtab_id)
+            self._initial_payload = self._collect_ui_payload()
 
             self._set_status(f"✓ Loaded rules: '{Path(filepath).name}'", is_error=False)
 
@@ -820,8 +828,41 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
         payload = self._collect_ui_payload()
         return FinancialRules.model_validate(payload)
 
+    def _on_operation_changed(self, _state: OperationState, _message: str) -> None:
+        """Disable mutation actions when pipeline or backup operations are active."""
+        busy = self.app_state.is_busy() if self.app_state else False
+        if hasattr(self, "save_btn") and self.save_btn.winfo_exists():
+            self.save_btn.configure(state="disabled" if busy else "normal")
+        if hasattr(self, "save_as_btn") and self.save_as_btn.winfo_exists():
+            self.save_as_btn.configure(state="disabled" if busy else "normal")
+        if hasattr(self, "reload_btn") and self.reload_btn.winfo_exists():
+            self.reload_btn.configure(state="disabled" if busy else "normal")
+
+    def is_dirty(self) -> bool:
+        """Whether current form inputs diverge from loaded baseline payload (Item 21)."""
+        if not self._initial_payload:
+            return False
+        try:
+            return self._collect_ui_payload() != self._initial_payload
+        except Exception:  # pylint: disable=broad-exception-caught
+            return False
+
+    def confirm_discard_changes(self) -> bool:
+        """Prompt confirmation if unsaved changes exist in financial rules."""
+        if not self.is_dirty():
+            return True
+        res = messagebox.askyesnocancel(
+            "Unsaved Changes",
+            "You have unsaved changes in Financial Rules.\n\nDo you want to save your changes before proceeding?",
+        )
+        if res is True:
+            return self.save_rules()
+        if res is False:
+            return True
+        return False
+
     def save_rules(self) -> bool:
-        """Validate and atomically persist financial rules to current file.
+        """Validate and atomically persist financial rules to current file (Item 21 & 22).
 
         Returns
         -------
@@ -830,6 +871,10 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
         """
         if not self.current_filepath:
             return False
+
+        # Clear prior field validation errors
+        for ed in self.editors.values():
+            ed.clear_error()
 
         try:
             validated_rules = self.gather_rules_from_ui()
@@ -841,6 +886,7 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
                 original_doc=self.original_doc,
             )
             self.active_rules = validated_rules
+            self._initial_payload = self._collect_ui_payload()
             self._set_status(
                 f"✓ Saved financial rules to '{Path(self.current_filepath).name}'.",
                 is_error=False,
@@ -852,10 +898,21 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
                 self.on_rules_saved(self.current_filepath)
             return True
         except ValidationError as ve:
-            err = ve.errors()[0]
-            loc = " ➔ ".join(str(p) for p in err["loc"])
+            error_count = len(ve.errors())
+            for err in ve.errors():
+                loc = ".".join(str(p) for p in err.get("loc", ()))
+                msg = str(err.get("msg", "Invalid value"))
+                if loc in self.editors:
+                    self.editors[loc].set_error(msg)
+                else:
+                    for k, ed in self.editors.items():
+                        if k.endswith(loc) or loc.endswith(k):
+                            ed.set_error(msg)
+            err_first = ve.errors()[0]
+            loc_disp = " ➔ ".join(str(p) for p in err_first["loc"])
             self._set_status(
-                f"✗ Cannot save: Validation Error at [{loc}]: {err['msg']}", is_error=True
+                f"✗ Validation failed: {error_count} error(s) found at [{loc_disp}]: {err_first['msg']}",
+                is_error=True,
             )
             return False
         except Exception as exc:
@@ -910,6 +967,8 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
 
     def _on_browse_file(self) -> None:
         """Open file dialog to choose an existing financial rules TOML file."""
+        if not self.confirm_discard_changes():
+            return
         chosen = filedialog.askopenfilename(
             title="Open Financial Rules Configuration",
             filetypes=[("TOML Files", "*.toml"), ("All Files", "*.*")],
@@ -919,11 +978,17 @@ class FinancialRulesTab(ctk.CTkFrame):  # type: ignore[misc]
 
     def _on_reload(self) -> None:
         """Reload configuration from disk."""
+        if not self.confirm_discard_changes():
+            return
         if self.current_filepath and os.path.isfile(self.current_filepath):
             self.load_rules(self.current_filepath, notify_state=False)
 
     def _on_rules_combo_selected(self, chosen: str) -> None:
         """Handle selection of a different rules file from the dropdown."""
+        if not self.confirm_discard_changes():
+            if self.current_filepath:
+                self.rules_path_var.set(self.current_filepath)
+            return
         if chosen and os.path.isfile(chosen) and chosen != self.current_filepath:
             self.load_rules(chosen, notify_state=True)
 
