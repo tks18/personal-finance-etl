@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [12.1.0](https://github.com/tks18/personal-finance-etl/compare/12.0.0...12.1.0) (2026-11-24)
+
+
+### Docs 📃
+
+* add final patch plan ([3657ca1](https://github.com/tks18/personal-finance-etl/commit/3657ca1c0af59e8d744f09a01aed0480378bf0d1))
+* add final patch readme ([250615d](https://github.com/tks18/personal-finance-etl/commit/250615d64d3d573bc1056f20e25e07f43f6d7d52))
+
+
+### Code Refactoring 🖌
+
+* **operator:** decouple service and harden market probe ([530054c](https://github.com/tks18/personal-finance-etl/commit/530054c3e853884fef277b7ac3e847f7d501ed38))
+
+
+### Features 🔥
+
+* **desktop:** add background task runner and operation state ([317fc73](https://github.com/tks18/personal-finance-etl/commit/317fc7362068783e6e75c249a679448ed75681ec))
+* **desktop:** add dirty tracking, validation, and shortcuts ([b293cda](https://github.com/tks18/personal-finance-etl/commit/b293cdaf0840df44f11855ed70853e0efd7de249))
+* **desktop:** make diagnostics and backup tasks non-blocking ([ad5e916](https://github.com/tks18/personal-finance-etl/commit/ad5e916cb8ffaa27c190047bd176c62d8abb9fe9))
+* **forensics:** add indexed model, LRU cache, and local time ([3aa94b9](https://github.com/tks18/personal-finance-etl/commit/3aa94b9e478cc83eb3d5cdea61d154f6a629d5b7))
+
+
+### Tests 🧪
+
+* **qa:** add desktop test suite and isolation verifications ([02bdc46](https://github.com/tks18/personal-finance-etl/commit/02bdc46ff97a654a52bbb4c1e2d0969ad3b3f17e))
+
 ## [12.0.0](https://github.com/tks18/personal-finance-etl/compare/11.3.8...12.0.0) (2026-11-23)
 
 
