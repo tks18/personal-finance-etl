@@ -1,5 +1,53 @@
 # Changelog
 
+All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
+
+### [12.1.2](https://github.com/tks18/personal-finance-etl/compare/12.1.0...12.1.2) (2026-11-24)
+
+
+### Code Refactoring 🖌
+
+* **audit_documenta:** remove deprecated audit_documentation ([0c9afbe](https://github.com/tks18/personal-finance-etl/commit/0c9afbe97c457b8c5d236db08fbb24c71c4a8d42))
+* **auto_commit:** remove deprecated auto_commit ([72122e5](https://github.com/tks18/personal-finance-etl/commit/72122e53b849307ceb22965d2948dd0cb474e7b5))
+* **create_pr:** remove deprecated create_pr ([1fad1f8](https://github.com/tks18/personal-finance-etl/commit/1fad1f8893071030c73c6bb3fd88e19460f4d282))
+* **create_releases:** remove deprecated create_releases ([c253e47](https://github.com/tks18/personal-finance-etl/commit/c253e47d9946567cac4fd90731d70e386813acca))
+* **install_hooks:** remove deprecated install_hooks ([5dc0efe](https://github.com/tks18/personal-finance-etl/commit/5dc0efea4a4d789e8507aa55160a6c9796bf7cf2))
+* **quality_gate:** remove deprecated quality_gate ([d85458b](https://github.com/tks18/personal-finance-etl/commit/d85458bd4e1fa3fc1f9145001e0f3acee4a492a0))
+* **scripts:** remove package facade ([f1278c3](https://github.com/tks18/personal-finance-etl/commit/f1278c3a7c5dd99ca287cc4ecbe3511fe59c3e05))
+* **tasks:** remove deprecated tasks ([b25a6e7](https://github.com/tks18/personal-finance-etl/commit/b25a6e72555f80d770313fc87b08ca585c628244))
+
+
+### CI 🛠
+
+* **hooks:** update git hook ([588d752](https://github.com/tks18/personal-finance-etl/commit/588d752c5118caf679650dbfda6fb3f38f7b9a93))
+* **poe_tasks:** align release tasks with pforge release commands ([220f197](https://github.com/tks18/personal-finance-etl/commit/220f197ed124b549dcb30fabd5b9ef9a101550f0))
+* **poe_tasks:** update tool configuration ([78132bb](https://github.com/tks18/personal-finance-etl/commit/78132bb600b9a5645906ed99d89d71a4cb827cea))
+
+
+### Docs 📃
+
+* **plan:** remove all planning docs ([2344dce](https://github.com/tks18/personal-finance-etl/commit/2344dcebe4ee69563d6adf51b9dba3810e5caa59))
+* remove all project-forge and final patch notes ([77142de](https://github.com/tks18/personal-finance-etl/commit/77142de168ccd8d92994fc598237a47c9eb2b410))
+
+
+### Build System 🏗
+
+* **release:** configure pforge 0.1.2 bump files and release flow ([c578376](https://github.com/tks18/personal-finance-etl/commit/c57837681f662a014dddcc27a9991c007e36587d))
+
+
+### Others 🔧
+
+* **deps:** bump pforge-cli to 0.1.1 ([ede0beb](https://github.com/tks18/personal-finance-etl/commit/ede0bebcc8b2590d12972fd64c80f5e4cc409893))
+* **package:** update project configuration ([c17169f](https://github.com/tks18/personal-finance-etl/commit/c17169fe87c4b4e5f8a44b6a03d5a67e63d38eb9))
+* **pyproject:** update project configuration ([788ce07](https://github.com/tks18/personal-finance-etl/commit/788ce07342c5cc4220d77440f33c854441e5b158))
+* release v12.1.1 ([47c7444](https://github.com/tks18/personal-finance-etl/commit/47c74447fda9df47c1f118aa2bf85c70f8ebe3c8))
+* **uv:** update project configuration ([0efa15c](https://github.com/tks18/personal-finance-etl/commit/0efa15c4cc4f57f78c47f5c04fcd9a01d89e2237))
+
+
+### Bug Fixes 🛠
+
+* bring back old scripts ([6608f2a](https://github.com/tks18/personal-finance-etl/commit/6608f2a7e83675b884340c961ed3011fa6c15f17))
+* **ci:** resolve pforge-cli from PyPI registry for CI environments ([70f709d](https://github.com/tks18/personal-finance-etl/commit/70f709de6e2f722ea3281e66b0cd9e931cc47244))
 
 ## [12.1.1] - 2026-11-24
 
