@@ -1,5 +1,39 @@
 # Changelog
 
+
+## [12.1.1] - 2026-11-24
+
+### Bug Fixes 🛠
+- **ci**: resolve pforge-cli from PyPI registry for CI environments ([70f709de](commit/70f709de))
+
+### Code Refactoring 🖌
+- **tasks**: remove deprecated tasks ([b25a6e72](commit/b25a6e72))
+- **quality_gate**: remove deprecated quality_gate ([d85458bd](commit/d85458bd))
+- **install_hooks**: remove deprecated install_hooks ([5dc0efea](commit/5dc0efea))
+- **create_releases**: remove deprecated create_releases ([c253e47d](commit/c253e47d))
+- **create_pr**: remove deprecated create_pr ([1fad1f88](commit/1fad1f88))
+- **auto_commit**: remove deprecated auto_commit ([72122e53](commit/72122e53))
+- **audit_documenta**: remove deprecated audit_documentation ([0c9afbe9](commit/0c9afbe9))
+- **scripts**: remove package facade ([f1278c3a](commit/f1278c3a))
+
+### Documentation 📃
+- **plan**: remove all planning docs ([2344dceb](commit/2344dceb))
+- remove all project-forge and final patch notes ([77142de1](commit/77142de1))
+
+### Build System 🏗
+- **release**: configure pforge 0.1.2 bump files and release flow ([c5783768](commit/c5783768))
+
+### CI / Tooling 🛠
+- **poe_tasks**: align release tasks with pforge release commands ([220f197e](commit/220f197e))
+- **poe_tasks**: update tool configuration ([78132bb6](commit/78132bb6))
+- **hooks**: update git hook ([588d752c](commit/588d752c))
+
+### Others 🔧
+- **deps**: bump pforge-cli to 0.1.1 ([ede0bebc](commit/ede0bebc))
+- **uv**: update project configuration ([0efa15c4](commit/0efa15c4))
+- **pyproject**: update project configuration ([788ce073](commit/788ce073))
+- **package**: update project configuration ([c17169fe](commit/c17169fe))
+
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
 ## [12.1.0](https://github.com/tks18/personal-finance-etl/compare/12.0.0...12.1.0) (2026-11-24)
