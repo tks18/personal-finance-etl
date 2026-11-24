@@ -26,7 +26,6 @@ from typing import Literal
 from personal_finance_etl.config.financial_rules import FinancialRules
 from personal_finance_etl.config.settings import Settings
 from personal_finance_etl.contracts.operator import OperatorInspector
-from personal_finance_etl.infrastructure.operator import LocalOperatorInspector
 
 __all__ = [
     "DoctorCheckResult",
@@ -103,11 +102,11 @@ class OperatorService:
 
     def __init__(
         self,
+        inspector: OperatorInspector,
         config_path: str | None = None,
         rules_path: str | None = None,
-        inspector: OperatorInspector | None = None,
     ) -> None:
-        self._inspector = inspector or LocalOperatorInspector()
+        self._inspector = inspector
         self.config_path = config_path or self._inspector.discover_config_path()
         self.rules_path = rules_path or self._inspector.discover_rules_path()
         self._cached_settings: Settings | None = None

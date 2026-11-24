@@ -19,7 +19,7 @@ import json
 import multiprocessing
 import os
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol, cast
@@ -77,8 +77,17 @@ class ContainerProtocol(Protocol):
         ...
 
 
-class PersonalFinanceEngine:
+_default_container_factory: Callable[[], ContainerProtocol] | None = None
+
+
+class PersonalFinanceEngine:  # pylint: disable=too-many-public-methods
     """Unified Façade for the entire Personal Finance Backend and Presentation boundary."""
+
+    @classmethod
+    def set_default_container_factory(cls, factory: Callable[[], ContainerProtocol] | None) -> None:
+        """Register a default ContainerProtocol factory for container resolution."""
+        global _default_container_factory
+        _default_container_factory = factory
 
     def __init__(self, container: ContainerProtocol | None = None) -> None:
         self.container = container
@@ -103,6 +112,14 @@ class PersonalFinanceEngine:
     def add_recent_rules(self, path: str) -> None:
         """Add a financial rules TOML path to the recent history."""
         self._prefs.add_recent_rules(path)
+
+    def get_ui_preferences(self) -> dict[str, object]:
+        """Fetch persisted UI presentation preferences."""
+        return self._prefs.get_ui_preferences()
+
+    def save_ui_preferences(self, preferences: Mapping[str, object]) -> None:
+        """Persist UI presentation preferences."""
+        self._prefs.save_ui_preferences(preferences)
 
     def validate_config(self, path: str) -> bool:
         """Validate whether a configuration TOML file parses correctly."""
@@ -174,32 +191,35 @@ class PersonalFinanceEngine:
 
     # --- Operator Services ---
 
+    def _resolve_operator_service(
+        self, config_path: str | None = None, rules_path: str | None = None
+    ) -> OperatorService:
+        """Resolve OperatorService via injected container or registered bootstrap root."""
+        container: ContainerProtocol | None = self.container
+        if container is None and _default_container_factory is not None:
+            container = _default_container_factory()
+        if container is not None:
+            return container.create_operator_service(config_path=config_path, rules_path=rules_path)
+        raise RuntimeError(
+            "Cannot resolve OperatorService: No container provided. "
+            "Instantiate via ServiceContainer().create_engine()."
+        )
+
     def get_system_status(self, config_path: str | None = None) -> SystemStatus:
         """Query system status, lock state, and latest run telemetry read-only."""
-        if self.container is not None and hasattr(self.container, "create_operator_service"):
-            op = self.container.create_operator_service(config_path=config_path)
-        else:
-            op = OperatorService(config_path=config_path)
+        op = self._resolve_operator_service(config_path=config_path)
         return op.get_status()
 
     def get_system_info(self, config_path: str | None = None) -> SystemInfo:
         """Inspect runtime environment, configured paths, and warehouse table inventory."""
-        if self.container is not None and hasattr(self.container, "create_operator_service"):
-            op = self.container.create_operator_service(config_path=config_path)
-        else:
-            op = OperatorService(config_path=config_path)
+        op = self._resolve_operator_service(config_path=config_path)
         return op.get_info()
 
     def run_doctor(
         self, config_path: str | None = None, rules_path: str | None = None
     ) -> DoctorReport:
         """Execute actionable system health checks without raising unhandled exceptions."""
-        if self.container is not None and hasattr(self.container, "create_operator_service"):
-            op = self.container.create_operator_service(
-                config_path=config_path, rules_path=rules_path
-            )
-        else:
-            op = OperatorService(config_path=config_path, rules_path=rules_path)
+        op = self._resolve_operator_service(config_path=config_path, rules_path=rules_path)
         return op.run_doctor()
 
     # --- Database Operations ---

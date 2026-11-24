@@ -127,11 +127,15 @@ class ServiceContainer:
         """Assemble an OperatorService wired with an OperatorInspector."""
         active_inspector = inspector or self.create_operator_inspector()
         return OperatorService(
+            inspector=active_inspector,
             config_path=config_path,
             rules_path=rules_path,
-            inspector=active_inspector,
         )
 
     def create_engine(self) -> PersonalFinanceEngine:
         """Assemble a PersonalFinanceEngine application façade bound to this container."""
         return PersonalFinanceEngine(container=self)
+
+
+# Register default container factory on PersonalFinanceEngine
+PersonalFinanceEngine.set_default_container_factory(ServiceContainer)
