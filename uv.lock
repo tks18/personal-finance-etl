@@ -850,7 +850,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=2.3.0" },
-    { name = "pforge-cli", specifier = ">=0.1.1" },
+    { name = "pforge-cli", specifier = ">=0.1.2" },
     { name = "poethepoet", specifier = ">=0.48.0" },
     { name = "pyinstaller", specifier = ">=6.21.0" },
     { name = "pylint", specifier = ">=4.1.3" },
@@ -863,7 +863,7 @@ dev = [
 
 [[package]]
 name = "pforge-cli"
-version = "0.1.1"
+version = "0.1.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "packaging" },
@@ -872,9 +872,9 @@ dependencies = [
     { name = "tomlkit" },
     { name = "typer" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d6/5c/6ee599affef6ca19cae760008b3420e8b440da5108a7992259f63688e4c9/pforge_cli-0.1.1.tar.gz", hash = "sha256:47ad472263cfd2ad9bd7f26ecdf083d887cc9ec4810933f9b702bd5ca79b5e66", size = 34114, upload-time = "2026-11-24T15:56:59.302Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c4/85/879a31801d9039c65da20a6413752211200c25e42d7ca296cf181fb736ad/pforge_cli-0.1.2.tar.gz", hash = "sha256:cf0222eea6526ee843087e652e915673325ffb44306245bdaa98d6c951068ca4", size = 34920, upload-time = "2026-11-24T16:56:27.683Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ee/d8/99cb8e0368f487e7563e97a85617b8ab6cdea78c96bf026f9815f94152dd/pforge_cli-0.1.1-py3-none-any.whl", hash = "sha256:d9397228e80d67bc3e88b6d3562786920598b143459ad3614f642782d416b31b", size = 42436, upload-time = "2026-11-24T15:56:58.353Z" },
+    { url = "https://files.pythonhosted.org/packages/89/02/d1d8d31c44609ef01acd48986cd1eb6229d7efd03aecdddb9d9cd22c8051/pforge_cli-0.1.2-py3-none-any.whl", hash = "sha256:1eea4579b80a7a646a4d88373d53642560bb27c0e6450ffa29444d889f8b2cbc", size = 43216, upload-time = "2026-11-24T16:56:26.697Z" },
 ]
 
 [[package]]

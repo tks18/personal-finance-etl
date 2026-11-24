@@ -17,6 +17,10 @@ build = { cmd = "pyinstaller --clean -y main.spec", help = "Build standalone pro
 "release:all" = { cmd = "pforge release publish --interactive", help = "Publish all unreleased tags interactively to GitHub" }
 "release:all:draft" = { cmd = "pforge release publish --draft", help = "Publish all unreleased tags as GitHub drafts" }
 "release:pipeline" = { cmd = "pforge release pipeline", help = "Execute full post-release pipeline: git push (triggers audit) -> create PR -> draft release" }
+"release:flow" = { cmd = "pforge release flow", help = "Bump version automatically and execute full post-release pipeline" }
+"release:flow:patch" = { cmd = "pforge release flow --patch", help = "Bump patch version and execute full post-release pipeline" }
+"release:flow:minor" = { cmd = "pforge release flow --minor", help = "Bump minor version and execute full post-release pipeline" }
+"release:flow:major" = { cmd = "pforge release flow --major", help = "Bump major version and execute full post-release pipeline" }
 "pypi:publish" = { cmd = "pforge publish", help = "Build and publish package to PyPI using token from .env" }
 
 # GitHub Pull Request Management
