@@ -86,9 +86,6 @@ dev = [
 [tool.uv]
 default-groups = ["dev"]
 
-[tool.uv.sources]
-pforge-cli = { path = "d:/Python Projects/project-forge", editable = true }
-
 [build-system]
 requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
