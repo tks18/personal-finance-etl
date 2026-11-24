@@ -863,7 +863,7 @@ dev = [
 
 [[package]]
 name = "pforge-cli"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "D:/Python Projects/project-forge" }
 dependencies = [
     { name = "packaging" },
