@@ -81,16 +81,23 @@ def aggregate_currency_analytics(
         Foreign currency exposure by month end date.
     """
     lf_inv_curr = df_inv_curr.lazy() if isinstance(df_inv_curr, pl.DataFrame) else df_inv_curr
-    return (
-        lf_inv_curr.with_columns(pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE"))
-        .filter(pl.col("CURRENCY_ID") != default_currency_id)
+    # Map each row to its month‑end date
+    lf_mapped = lf_inv_curr.with_columns(
+        pl.col("Closing_Date").dt.month_end().alias("MONTH_END_DATE")
+    )
+    # Identify the latest closing date per month for non‑default currencies
+    lf_latest = (
+        lf_mapped.filter(pl.col("CURRENCY_ID") != default_currency_id)
         .group_by("MONTH_END_DATE")
-        .agg(
-            pl.col("Total_Current_Value")
-            .sum()
-            .fill_null(0.0)
-            .alias("Total_Foreign_Currency_Exposure")
-        )
+        .agg(pl.col("Closing_Date").max().alias("Max_Closing_Date"))
+    )
+    # Keep only rows that correspond to the month‑end snapshot
+    lf_snapshot = lf_mapped.join(lf_latest, on="MONTH_END_DATE").filter(
+        pl.col("Closing_Date") == pl.col("Max_Closing_Date")
+    )
+    # Aggregate the foreign‑currency exposure for each month end
+    return lf_snapshot.group_by("MONTH_END_DATE").agg(
+        pl.col("Total_Current_Value").sum().fill_null(0.0).alias("Total_Foreign_Currency_Exposure")
     )
 
 

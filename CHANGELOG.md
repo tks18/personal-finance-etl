@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [12.1.3](https://github.com/tks18/personal-finance-etl/compare/12.1.2...12.1.3) (2026-11-25)
+
+
+### Bug Fixes 🛠
+
+* **market_valuation:** correct foreign exposure month‑end snapshot ([8c7bf26](https://github.com/tks18/personal-finance-etl/commit/8c7bf26014595c1446d287d370dd5c17d00ad6a5))
+
 ### [12.1.2](https://github.com/tks18/personal-finance-etl/compare/12.1.0...12.1.2) (2026-11-24)
 
 
